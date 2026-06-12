@@ -45,7 +45,7 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
 
   void _pause() { _running = false; _anim.stop(); setState(() {}); }
   void _reset() { _running = false; _remaining = 0; _anim.reset(); setState(() {}); }
-  void _adjust(int delta) { _seconds = (_seconds + delta).clamp(30, 600); _reset(); }
+  void _adjust(int delta) { _seconds = (_seconds + delta).clamp(5, 600); _reset(); }
 
   @override
   Widget build(BuildContext context) {
