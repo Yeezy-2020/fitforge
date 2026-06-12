@@ -21,28 +21,12 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _collapsed = false;
-  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
-    _scrollCtrl.addListener(_handleScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.removeListener(_handleScroll);
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _handleScroll() {
-    if (!mounted) return;
-    final px = _scrollCtrl.offset;
-    if (px > 40 && !_collapsed) setState(() => _collapsed = true);
-    if (px <= 0 && _collapsed) setState(() => _collapsed = false);
   }
 
   @override
@@ -68,64 +52,73 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
         },
         icon: const Icon(Icons.add), label: Text(l10n.get('logWorkout')),
       ),
-      body: SingleChildScrollView(
-        controller: _scrollCtrl,
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(children: [
-          AnimatedSize(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut, alignment: Alignment.topCenter,
-            child: _collapsed ? const SizedBox.shrink() : TableCalendar(
-              firstDay: DateTime(2020), lastDay: DateTime(2030), focusedDay: _focusedDay,
-              availableCalendarFormats: const {CalendarFormat.month: 'Month'},
-              selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
-              onDaySelected: (d, f) { setState(() { _selectedDay = d; _focusedDay = f; }); ref.read(selectedDateProvider.notifier).state = d; },
-              onPageChanged: (m) { setState(() => _focusedDay = m); ref.read(workoutCacheProvider.notifier).loadMonth(m); },
-              locale: ref.watch(localeProvider) == AppLocale.zh ? 'zh_CN' : 'en_US',
-              calendarStyle: CalendarStyle(
-                todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
-                selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-              ),
-              calendarBuilders: CalendarBuilders(markerBuilder: (c, d, _) => workoutDates.any((w) => isSameDay(w, d))
-                ? Positioned(bottom: 1, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)))
-                : null),
+      body: Column(children: [
+        AnimatedSize(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut, alignment: Alignment.topCenter,
+          child: _collapsed ? const SizedBox.shrink() : TableCalendar(
+            firstDay: DateTime(2020), lastDay: DateTime(2030), focusedDay: _focusedDay,
+            availableCalendarFormats: const {CalendarFormat.month: 'Month'},
+            selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
+            onDaySelected: (d, f) { setState(() { _selectedDay = d; _focusedDay = f; }); ref.read(selectedDateProvider.notifier).state = d; },
+            onPageChanged: (m) { setState(() => _focusedDay = m); ref.read(workoutCacheProvider.notifier).loadMonth(m); },
+            locale: ref.watch(localeProvider) == AppLocale.zh ? 'zh_CN' : 'en_US',
+            calendarStyle: CalendarStyle(
+              todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
+              selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
             ),
+            calendarBuilders: CalendarBuilders(markerBuilder: (c, d, _) => workoutDates.any((w) => isSameDay(w, d))
+              ? Positioned(bottom: 1, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)))
+              : null),
           ),
-          if (_selectedDay == null)
-            SizedBox(height: 400, child: Center(child: Text(l10n.get('selectBodyPart'))))
-          else if (logs.isEmpty)
-            SizedBox(height: 400, child: Center(child: Text(l10n.get('noWorkout'), style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey))))
-          else
-            ReorderableListView.builder(
-              shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(8), itemCount: logs.length,
-              onReorder: (oldI, newI) {
-                final list = List<WorkoutLog>.from(logs);
-                if (newI > oldI) newI--;
-                list.insert(newI, list.removeAt(oldI));
-                ref.read(workoutLogCacheProvider.notifier).loadDate(_selectedDay!);
-              },
-              buildDefaultDragHandles: true,
-              proxyDecorator: (child, i, _) => Material(elevation: 4, borderRadius: BorderRadius.circular(12), child: child),
-              itemBuilder: (context, i) {
-                final log = logs[i];
-                return Card(
-                  key: ValueKey(log.id), margin: const EdgeInsets.only(bottom: 6),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _edit(context, ref, log, exName(log.exerciseId)),
-                    child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
-                      ReorderableDragStartListener(index: i, child: const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.drag_handle, size: 20, color: Colors.grey))),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(exName(log.exerciseId), style: Theme.of(context).textTheme.titleSmall),
-                        Text('${log.sets} x ${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium),
-                      ])),
-                      const Icon(Icons.edit, size: 14, color: Colors.grey),
-                    ])),
-                  ),
-                );
-              },
-            ),
-        ]),
-      ),
+        ),
+        // Drag handle bar
+        GestureDetector(
+          onVerticalDragUpdate: (d) {
+            if (d.delta.dy < -10 && !_collapsed) setState(() => _collapsed = true);
+            if (d.delta.dy > 10 && _collapsed) setState(() => _collapsed = false);
+          },
+          onTap: () => setState(() => _collapsed = !_collapsed),
+          child: Container(
+            height: 24,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            child: Center(child: Container(width: 32, height: 4, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)))),
+          ),
+        ),
+        Expanded(
+          child: _selectedDay == null
+              ? Center(child: Text(l10n.get('selectBodyPart')))
+              : logs.isEmpty
+                  ? Center(child: Text(l10n.get('noWorkout'), style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)))
+                  : ReorderableListView.builder(
+                      padding: const EdgeInsets.all(8), itemCount: logs.length,
+                      onReorder: (oldI, newI) {
+                        final list = List<WorkoutLog>.from(logs);
+                        if (newI > oldI) newI--;
+                        list.insert(newI, list.removeAt(oldI));
+                        ref.read(workoutLogCacheProvider.notifier).loadDate(_selectedDay!);
+                      },
+                      buildDefaultDragHandles: true,
+                      proxyDecorator: (child, i, _) => Material(elevation: 4, borderRadius: BorderRadius.circular(12), child: child),
+                      itemBuilder: (context, i) {
+                        final log = logs[i];
+                        return Card(
+                          key: ValueKey(log.id), margin: const EdgeInsets.only(bottom: 6),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _edit(context, ref, log, exName(log.exerciseId)),
+                            child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+                              ReorderableDragStartListener(index: i, child: const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.drag_handle, size: 20, color: Colors.grey))),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(exName(log.exerciseId), style: Theme.of(context).textTheme.titleSmall),
+                                Text('${log.sets} x ${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium),
+                              ])),
+                              const Icon(Icons.edit, size: 14, color: Colors.grey),
+                            ])),
+                          ),
+                        );
+                      },
+                    ),
+        ),
+      ]),
     );
   }
 
