@@ -21,6 +21,8 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _calendarExpanded = true;
+  final _scrollController = ScrollController();
+  double _lastScrollOffset = 0;
 
   @override
   void initState() {
@@ -29,6 +31,26 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
     if (_selectedDay != null) {
       ref.read(workoutLogCacheProvider.notifier).loadDate(_selectedDay!);
+    }
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.offset;
+    final direction = offset - _lastScrollOffset;
+    _lastScrollOffset = offset;
+    // Collapse when scrolling down past 30px, expand when at top
+    if (offset > 30 && direction > 0 && _calendarExpanded) {
+      setState(() => _calendarExpanded = false);
+    } else if (offset <= 0 && !_calendarExpanded) {
+      setState(() => _calendarExpanded = true);
     }
   }
 
@@ -51,17 +73,7 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
     final workoutDates = cache[k] ?? {};
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.get('training')),
-        actions: [
-          if (_selectedDay != null)
-            IconButton(
-              icon: Icon(_calendarExpanded ? Icons.expand_less : Icons.expand_more),
-              tooltip: _calendarExpanded ? 'Hide calendar' : 'Show calendar',
-              onPressed: () => setState(() => _calendarExpanded = !_calendarExpanded),
-            ),
-        ],
-      ),
+      appBar: AppBar(title: Text(l10n.get('training'))),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add_workout',
         onPressed: () {
@@ -74,7 +86,7 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
       body: Column(
         children: [
           AnimatedSize(
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 250),
             curve: Curves.easeInOut,
             alignment: Alignment.topCenter,
             child: _calendarExpanded
@@ -101,18 +113,9 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
                   )
                 : const SizedBox.shrink(),
           ),
-          if (!_calendarExpanded)
-            GestureDetector(
-              onTap: () => setState(() => _calendarExpanded = true),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Center(child: Icon(Icons.expand_more, size: 20, color: Colors.grey.shade500)),
-              ),
-            ),
           Expanded(
             child: _selectedDay != null
-                ? _WorkoutDaySummary(l10n: l10n, date: _selectedDay!)
+                ? _WorkoutDaySummary(l10n: l10n, date: _selectedDay!, scrollController: _scrollController)
                 : Center(child: Text(l10n.get('selectBodyPart'))),
           ),
         ],
@@ -124,7 +127,8 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
 class _WorkoutDaySummary extends ConsumerWidget {
   final L10n l10n;
   final DateTime date;
-  _WorkoutDaySummary({required this.l10n, required this.date});
+  final ScrollController scrollController;
+  _WorkoutDaySummary({required this.l10n, required this.date, required this.scrollController});
 
   void _editWorkout(BuildContext context, WidgetRef ref, WorkoutLog log, String exerciseName) {
     final trainUnit = ref.read(trainingWeightUnitProvider);
@@ -207,6 +211,7 @@ class _WorkoutDaySummary extends ConsumerWidget {
 
     return ReorderableListView.builder(
       padding: const EdgeInsets.all(8),
+      scrollController: scrollController,
       itemCount: logsToShow.length,
       onReorder: (oldIndex, newIndex) {
         // Reorder in cache
