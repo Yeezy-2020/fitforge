@@ -115,6 +115,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                   ? Center(child: Text(l10n.get('noWorkout'), style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)))
                   : ReorderableListView.builder(
                       padding: const EdgeInsets.all(8), itemCount: logs.length,
+                      buildDefaultDragHandles: false,
                       onReorder: (oldI, newI) {
                         final list = List<WorkoutLog>.from(logs);
                         if (newI > oldI) newI--;
