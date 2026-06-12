@@ -10,12 +10,9 @@ import '../../../core/services/supabase_service.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
-import '../../../data/models/workout_log.dart';
-import '../../../data/models/exercise.dart';
 
 class WorkoutCalendarScreen extends ConsumerStatefulWidget {
   const WorkoutCalendarScreen({super.key});
-
   @override
   ConsumerState<WorkoutCalendarScreen> createState() => _WorkoutCalendarScreenState();
 }
@@ -23,17 +20,22 @@ class WorkoutCalendarScreen extends ConsumerStatefulWidget {
 class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  bool _calendarExpanded = true;
 
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
+    if (_selectedDay != null) {
+      ref.read(workoutLogCacheProvider.notifier).loadDate(_selectedDay!);
+    }
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
     setState(() { _selectedDay = selectedDay; _focusedDay = focusedDay; });
     ref.read(selectedDateProvider.notifier).state = selectedDay;
+    ref.read(workoutLogCacheProvider.notifier).loadDate(selectedDay);
   }
 
   void _onPageChanged(DateTime focusedDay) {
@@ -49,42 +51,70 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
     final workoutDates = cache[k] ?? {};
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.get('training'))),
+      appBar: AppBar(
+        title: Text(l10n.get('training')),
+        actions: [
+          if (_selectedDay != null)
+            IconButton(
+              icon: Icon(_calendarExpanded ? Icons.expand_less : Icons.expand_more),
+              tooltip: _calendarExpanded ? 'Hide calendar' : 'Show calendar',
+              onPressed: () => setState(() => _calendarExpanded = !_calendarExpanded),
+            ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add_workout',
         onPressed: () {
           final date = _selectedDay ?? DateTime.now();
-          final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-          context.push('/home/day/$dateStr');
+          context.push('/home/day/${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}');
         },
         icon: const Icon(Icons.add),
         label: Text(l10n.get('logWorkout')),
       ),
       body: Column(
         children: [
-          TableCalendar(
-            firstDay: DateTime(2020), lastDay: DateTime(2030),
-            focusedDay: _focusedDay,
-            availableCalendarFormats: const {CalendarFormat.month: 'Month'},
-            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-            onDaySelected: _onDaySelected,
-            onPageChanged: _onPageChanged,
-            locale: ref.watch(localeProvider) == AppLocale.zh ? 'zh_CN' : 'en_US',
-            calendarStyle: CalendarStyle(
-              todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
-              selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-            ),
-            calendarBuilders: CalendarBuilders(
-              markerBuilder: (context, date, events) {
-                if (workoutDates.any((d) => isSameDay(d, date))) {
-                  return Positioned(bottom: 1, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)));
-                }
-                return null;
-              },
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: _calendarExpanded
+                ? TableCalendar(
+                    firstDay: DateTime(2020), lastDay: DateTime(2030),
+                    focusedDay: _focusedDay,
+                    availableCalendarFormats: const {CalendarFormat.month: 'Month'},
+                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                    onDaySelected: _onDaySelected,
+                    onPageChanged: _onPageChanged,
+                    locale: ref.watch(localeProvider) == AppLocale.zh ? 'zh_CN' : 'en_US',
+                    calendarStyle: CalendarStyle(
+                      todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
+                      selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
+                    ),
+                    calendarBuilders: CalendarBuilders(
+                      markerBuilder: (context, date, events) {
+                        if (workoutDates.any((d) => isSameDay(d, date))) {
+                          return Positioned(bottom: 1, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)));
+                        }
+                        return null;
+                      },
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
-          const SizedBox(height: 8),
-          if (_selectedDay != null) _WorkoutDaySummary(l10n: l10n, date: _selectedDay!),
+          if (!_calendarExpanded)
+            GestureDetector(
+              onTap: () => setState(() => _calendarExpanded = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Center(child: Icon(Icons.expand_more, size: 20, color: Colors.grey.shade500)),
+              ),
+            ),
+          Expanded(
+            child: _selectedDay != null
+                ? _WorkoutDaySummary(l10n: l10n, date: _selectedDay!)
+                : Center(child: Text(l10n.get('selectBodyPart'))),
+          ),
         ],
       ),
     );
@@ -103,7 +133,6 @@ class _WorkoutDaySummary extends ConsumerWidget {
     final repsCtrl = TextEditingController(text: log.reps.toString());
     final weightCtrl = TextEditingController(text: (trainUnit == WeightUnit.lb ? (log.weightKg * kgToLb) : log.weightKg).toStringAsFixed(1));
     final unitLabel = trainUnit == WeightUnit.kg ? 'kg' : 'lb';
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -118,14 +147,7 @@ class _WorkoutDaySummary extends ConsumerWidget {
           ]),
         ]),
         actions: [
-          TextButton.icon(
-            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-            label: Text(l10n.get('delete'), style: const TextStyle(color: Colors.red)),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _confirmDelete(ctx, ref, log);
-            },
-          ),
+          TextButton.icon(icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red), label: Text(l10n.get('delete'), style: const TextStyle(color: Colors.red)), onPressed: () { Navigator.pop(ctx); _confirmDelete(ctx, ref, log); }),
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.get('cancel'))),
           FilledButton(onPressed: () {
             final newSets = int.tryParse(setsCtrl.text)?.clamp(1, 999) ?? log.sets;
@@ -133,23 +155,15 @@ class _WorkoutDaySummary extends ConsumerWidget {
             double newWeight = double.tryParse(weightCtrl.text) ?? log.weightKg;
             if (trainUnit == WeightUnit.lb) newWeight = newWeight / kgToLb;
             final updated = WorkoutLog(id: log.id, userId: log.userId, exerciseId: log.exerciseId, date: log.date, sets: newSets, reps: newReps, weightKg: newWeight, createdAt: log.createdAt);
-            _updateInCache(ref, log, updated);
+            AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), log.id);
+            AppDatabase.instance.addWorkoutLog(ref.read(currentUserIdProvider), updated);
+            try { ref.read(supabaseProvider).addWorkoutLog(updated); } catch (_) {}
+            ref.read(workoutLogCacheProvider.notifier).loadDate(date);
             Navigator.pop(ctx);
           }, child: Text(l10n.get('save'))),
         ],
       ),
     );
-  }
-
-  void _updateInCache(WidgetRef ref, WorkoutLog oldLog, WorkoutLog newLog) {
-    // Our cache stores lists of logs per date. We need to replace the old log.
-    // Simplest approach: delete old from Supabase, add new, then reload.
-    AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), oldLog.id);
-    AppDatabase.instance.addWorkoutLog(ref.read(currentUserIdProvider), newLog);
-    try { ref.read(supabaseProvider).addWorkoutLog(newLog); } catch (_) {}
-    ref.invalidate(workoutLogsForDateProvider);
-    // Force cache reload
-    ref.read(workoutLogCacheProvider.notifier).loadDate(date);
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref, WorkoutLog log) {
@@ -164,7 +178,6 @@ class _WorkoutDaySummary extends ConsumerWidget {
           FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () {
             AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), log.id);
             try { ref.read(supabaseProvider).deleteWorkoutLog(log.id); } catch (_) {}
-            ref.invalidate(workoutLogsForDateProvider);
             ref.read(workoutLogCacheProvider.notifier).loadDate(date);
             ref.read(workoutCacheProvider.notifier).loadMonth(date);
             Navigator.pop(ctx);
@@ -174,11 +187,8 @@ class _WorkoutDaySummary extends ConsumerWidget {
     );
   }
 
-  BuildContext? _lastContext;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    _lastContext = context;
     final logCache = ref.watch(workoutLogCacheProvider);
     final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final cachedLogs = logCache[dateKey] ?? [];
@@ -190,43 +200,62 @@ class _WorkoutDaySummary extends ConsumerWidget {
       return ref.read(l10nProvider).exerciseName(ex.id, ex.name);
     }
 
-    return Expanded(
-      child: cachedLogs.isNotEmpty
-          ? _buildLogList(context, ref, cachedLogs, exName, trainUnit)
-          : ref.watch(workoutLogsForDateProvider(date)).when(
-              data: (logs) => _buildLogList(context, ref, logs, exName, trainUnit),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => Center(child: Text(l10n.get('failedToLoad'))),
-            ),
-    );
-  }
+    final logsToShow = cachedLogs.isNotEmpty ? cachedLogs : [];
+    if (logsToShow.isEmpty) {
+      return Center(child: Text('No workout for ${DateFormat('MMM d').format(date)}', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)));
+    }
 
-  Widget _buildLogList(BuildContext context, WidgetRef ref, List<WorkoutLog> logs, String Function(String) exName, WeightUnit trainUnit) {
-    if (logs.isEmpty) return Center(child: Text('No workout for ${DateFormat('MMM d').format(date)}', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)));
-    final grouped = <String, List<WorkoutLog>>{};
-    for (final log in logs) { grouped.putIfAbsent(log.exerciseId, () => []); grouped[log.exerciseId]!.add(log); }
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      children: grouped.entries.map((entry) => Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(exName(entry.key), style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            ...entry.value.map((log) => InkWell(
-              onTap: () => _editWorkout(context, ref, log, exName(entry.key)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(child: Text('${log.sets} x ${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium)),
-                  const Icon(Icons.edit, size: 14, color: Colors.grey),
-                ]),
-              ),
-            )),
-          ]),
-        ),
-      )).toList(),
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: logsToShow.length,
+      onReorder: (oldIndex, newIndex) {
+        // Reorder in cache
+        final list = List<WorkoutLog>.from(logsToShow);
+        if (newIndex > oldIndex) newIndex--;
+        final item = list.removeAt(oldIndex);
+        list.insert(newIndex, item);
+        ref.read(workoutLogCacheProvider.notifier).addLogs(date, []);
+        for (final l in list) {
+          ref.read(workoutLogCacheProvider.notifier).addLogs(date, [l]);
+        }
+      },
+      buildDefaultDragHandles: true,
+      proxyDecorator: (child, index, animation) => Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(12),
+        child: child,
+      ),
+      itemBuilder: (context, index) {
+        final log = logsToShow[index];
+        return Card(
+          key: ValueKey(log.id),
+          margin: const EdgeInsets.only(bottom: 6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _editWorkout(context, ref, log, exName(log.exerciseId)),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(children: [
+                ReorderableDragStartListener(
+                  index: index,
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(Icons.drag_handle, size: 20, color: Colors.grey),
+                  ),
+                ),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(exName(log.exerciseId), style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text('${log.sets} x ${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium),
+                  ]),
+                ),
+                const Icon(Icons.edit, size: 14, color: Colors.grey),
+              ]),
+            ),
+          ),
+        );
+      },
     );
   }
 }
