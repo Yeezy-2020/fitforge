@@ -56,7 +56,7 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
         if (_entries.isNotEmpty) ...[
           SizedBox(height: 200, child: _buildChart()),
           const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [7, 30, 90].map((d) => Padding(
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: <int>[7, 30, 90].map((d) => Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: ChoiceChip(label: Text('${d}d'), selected: _chartDays == d, onSelected: (_) => setState(() => _chartDays = d)),
           )).toList())),
@@ -84,10 +84,10 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
         const SizedBox(height: 16),
         if (_entries.isNotEmpty) ...[
           Text('History', style: Theme.of(context).textTheme.titleSmall),
-          ..._entries.map((e) => ListTile(
+          ..._entries.map<Widget>((e) => ListTile(
             dense: true,
             title: Text('${DateFormat('MMM d').format(e.date)}  ${e.weight}kg'),
-            subtitle: Text([if (e.chest != null) 'Chest: ${e.chest}', if (e.waist != null) 'Waist: ${e.waist}', if (e.leftArm != null) 'Arm: ${e.leftArm}'].join('  ')),
+            subtitle: Text([if (e.chest != null) 'Chest: ${e.chest}cm', if (e.waist != null) 'Waist: ${e.waist}cm', if (e.leftArm != null) 'Arm: ${e.leftArm}cm'].where((s) => s.isNotEmpty).join('  ')),
           )),
         ],
       ])),
