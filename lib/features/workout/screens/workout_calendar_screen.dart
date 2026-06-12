@@ -17,16 +17,21 @@ class WorkoutCalendarScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkoutCalendarScreen> createState() => _State();
 }
 
-class _State extends ConsumerState<WorkoutCalendarScreen> {
+class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliveClientMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _collapsed = false;
   final ScrollController _scrollCtrl = ScrollController();
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _selectedDay = DateTime.now();
+    _selectedDay = ref.read(selectedDateProvider);
+    _focusedDay = _selectedDay ?? DateTime.now();
+    _selectedDay ??= DateTime.now();
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
     _scrollCtrl.addListener(() {
       final px = _scrollCtrl.offset;
@@ -43,6 +48,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // for AutomaticKeepAliveClientMixin
     final l10n = ref.watch(l10nProvider);
     final trainUnit = ref.watch(trainingWeightUnitProvider);
     final cache = ref.watch(workoutCacheProvider);
