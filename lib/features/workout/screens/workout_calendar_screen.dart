@@ -21,12 +21,31 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _collapsed = false;
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!mounted) return;
+    final px = _scrollCtrl.offset;
+    if (px > 30 && !_collapsed) {
+      setState(() => _collapsed = true);
+    } else if (px <= 0 && _collapsed) {
+      setState(() => _collapsed = false);
+    }
   }
 
   @override
@@ -52,14 +71,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
         },
         icon: const Icon(Icons.add), label: Text(l10n.get('logWorkout')),
       ),
-      body: NotificationListener<ScrollUpdateNotification>(
-        onNotification: (n) {
-          final px = n.metrics.pixels;
-          if (px > 30 && (n.scrollDelta ?? 0) > 0 && !_collapsed) setState(() => _collapsed = true);
-          if (px <= 0 && _collapsed) setState(() => _collapsed = false);
-          return false;
-        },
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+          controller: _scrollCtrl,
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(children: [
             AnimatedSize(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut, alignment: Alignment.topCenter,
@@ -115,7 +128,6 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
                 },
               ),
           ]),
-      ),
       ),
     );
   }

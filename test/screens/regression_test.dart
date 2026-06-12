@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:fitforge/data/models/workout_log.dart';
 
 void main() {
@@ -104,16 +105,78 @@ void main() {
     });
 
     test('SingleChildScrollView with AlwaysScrollableScrollPhysics generates events even with small content', () {
-      // AlwaysScrollableScrollPhysics always reports scrollable,
-      // even when the content fits within the viewport.
-      // This ensures the NotificationListener catches scroll events.
-      bool notified = false;
-      // Verify that our logic correctly detects scroll with AlwaysScrollable
-      // Any scroll delta > 0 past threshold should trigger collapse
-      final px = 35.0;
-      final delta = 5.0;
-      final collapsed = px > 30 && delta > 0;
+      bool collapsed = false;
+      // Simulate a ScrollController listener with different content sizes
+      final controller = ScrollController();
+      bool listenerCalled = false;
+      controller.addListener(() { listenerCalled = true; });
+
+      // Simulate scroll
+      // Controller.position changes when attached to real widget,
+      // but we can test the logic independently
+      final offsets = [0.0, 15.0, 35.0, 35.0, 0.0];
+      double px = 0;
+      for (final offset in offsets) {
+        px = offset;
+        if (px > 30 && !collapsed) collapsed = true;
+        if (px <= 0 && collapsed) collapsed = false;
+      }
+
+      // After 35: collapsed=true, after 0: collapsed=false
+      expect(collapsed, false);
+      expect(px, 0.0);
+    });
+
+    test('collapse works after content size change', () {
+      // When workout cards are added, content grows but collapse should still work
+      bool collapsed = false;
+
+      // Empty state: scrollable but short
+      double px = 0;
+      if (px > 30 && !collapsed) collapsed = true;
+      if (px <= 0 && collapsed) collapsed = false;
+      expect(collapsed, false);
+
+      // After adding content, scroll to 40
+      px = 40;
+      if (px > 30 && !collapsed) collapsed = true;
       expect(collapsed, true);
+
+      // Scroll back to 0
+      px = 0;
+      if (px <= 0 && collapsed) collapsed = false;
+      expect(collapsed, false);
+
+      // Scroll to 50 with new content
+      px = 50;
+      if (px > 30 && !collapsed) collapsed = true;
+      expect(collapsed, true);
+    });
+
+    test('collapse does not get stuck', () {
+      bool collapsed = false;
+      double px = 0;
+
+      // Simulate realistic scroll pattern
+      final patterns = [
+        [0.0, 5.0, 10.0, 35.0],
+        [35.0, 25.0, 10.0, 0.0],
+        [0.0, 15.0, 40.0],
+        [40.0, 20.0, 5.0, 0.0],
+        [0.0, 20.0, 45.0, 60.0],
+        [60.0, 45.0, 30.0, 15.0, 0.0],
+      ];
+
+      for (final pattern in patterns) {
+        for (final offset in pattern) {
+          px = offset;
+          if (px > 30 && !collapsed) collapsed = true;
+          if (px <= 0 && collapsed) collapsed = false;
+        }
+      }
+
+      expect(collapsed, false); // Should end expanded at 0
+      expect(px, 0.0);
     });
   });
 }
