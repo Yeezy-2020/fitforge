@@ -98,9 +98,14 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
           },
           onTap: () => setState(() => _collapsed = !_collapsed),
           child: Container(
-            height: 28,
-            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-            child: Center(child: Icon(_collapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, size: 20, color: Theme.of(context).colorScheme.primary)),
+            height: 24,
+            color: Colors.transparent,
+            child: Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
           ),
         ),
         Expanded(
