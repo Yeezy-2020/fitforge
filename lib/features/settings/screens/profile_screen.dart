@@ -193,6 +193,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 16),
 
+              ListTile(
+                leading: const Icon(Icons.straighten),
+                title: const Text('Body Measurements'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/body'),
+              ),
+              const SizedBox(height: 16),
+
               // Subscription
               Card(
                 child: Padding(
