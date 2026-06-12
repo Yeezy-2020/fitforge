@@ -73,14 +73,16 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
         // Drag handle bar
         GestureDetector(
           onVerticalDragUpdate: (d) {
-            if (d.delta.dy < -10 && !_collapsed) setState(() => _collapsed = true);
-            if (d.delta.dy > 10 && _collapsed) setState(() => _collapsed = false);
+            if (d.delta.dy < -15 && !_collapsed) setState(() => _collapsed = true);
+            if (d.delta.dy > 15 && _collapsed) setState(() => _collapsed = false);
           },
           onTap: () => setState(() => _collapsed = !_collapsed),
           child: Container(
-            height: 24,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            child: Center(child: Container(width: 32, height: 4, decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2)))),
+            height: 32,
+            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
+            child: Center(
+              child: Icon(_collapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, size: 18, color: Theme.of(context).colorScheme.primary),
+            ),
           ),
         ),
         Expanded(
