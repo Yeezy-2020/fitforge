@@ -55,7 +55,22 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
     String exName(String id) => l10n.exerciseName(id, exercises.where((e) => e.id == id).firstOrNull?.name ?? id);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.get('training'))),
+      appBar: AppBar(
+        title: Text(l10n.get('training')),
+        actions: [
+          TextButton(
+            onPressed: () {
+              final today = DateTime.now();
+              setState(() {
+                _focusedDay = today;
+                _selectedDay = today;
+              });
+              ref.read(selectedDateProvider.notifier).state = today;
+            },
+            child: const Text('Today', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add_workout',
         onPressed: () {
