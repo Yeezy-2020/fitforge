@@ -56,13 +56,13 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
         if (_entries.isNotEmpty) ...[
           SizedBox(height: 200, child: _buildChart()),
           const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: <int>[7, 30, 90].map((d) => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: ChoiceChip(label: Text('${d}d'), selected: _chartDays == d, onSelected: (_) => setState(() => _chartDays = d)),
-          )).toList())),
-          const SizedBox(height: 16),
-        ],
-        Card(
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [7, 30, 90].map<Widget>((d) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ChoiceChip(label: Text('${d}d'), selected: _chartDays == d, onSelected: (_) => setState(() => _chartDays = d)),
+              )).toList()),
+              const SizedBox(height: 16),
+            ],
+            Card(
           child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
             Text('Add Entry', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
