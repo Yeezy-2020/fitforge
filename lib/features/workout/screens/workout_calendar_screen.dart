@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import '../../../data/models/workout_log.dart';
+import '../../../data/models/exercise.dart';
+import '../../../data/repositories/app_database.dart';
+import '../../../core/services/supabase_service.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
@@ -90,29 +94,117 @@ class _WorkoutCalendarScreenState extends ConsumerState<WorkoutCalendarScreen> {
 class _WorkoutDaySummary extends ConsumerWidget {
   final L10n l10n;
   final DateTime date;
-  const _WorkoutDaySummary({required this.l10n, required this.date});
+  _WorkoutDaySummary({required this.l10n, required this.date});
+
+  void _editWorkout(BuildContext context, WidgetRef ref, WorkoutLog log, String exerciseName) {
+    final trainUnit = ref.read(trainingWeightUnitProvider);
+    final l10n = ref.read(l10nProvider);
+    final setsCtrl = TextEditingController(text: log.sets.toString());
+    final repsCtrl = TextEditingController(text: log.reps.toString());
+    final weightCtrl = TextEditingController(text: (trainUnit == WeightUnit.lb ? (log.weightKg * kgToLb) : log.weightKg).toStringAsFixed(1));
+    final unitLabel = trainUnit == WeightUnit.kg ? 'kg' : 'lb';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(exerciseName),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            Expanded(child: TextField(controller: setsCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: InputDecoration(labelText: l10n.get('sets'), isDense: true))),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: repsCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: InputDecoration(labelText: l10n.get('reps'), isDense: true))),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: weightCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: InputDecoration(labelText: unitLabel, isDense: true))),
+          ]),
+        ]),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+            label: Text(l10n.get('delete'), style: const TextStyle(color: Colors.red)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmDelete(ctx, ref, log);
+            },
+          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.get('cancel'))),
+          FilledButton(onPressed: () {
+            final newSets = int.tryParse(setsCtrl.text)?.clamp(1, 999) ?? log.sets;
+            final newReps = int.tryParse(repsCtrl.text)?.clamp(1, 9999) ?? log.reps;
+            double newWeight = double.tryParse(weightCtrl.text) ?? log.weightKg;
+            if (trainUnit == WeightUnit.lb) newWeight = newWeight / kgToLb;
+            final updated = WorkoutLog(id: log.id, userId: log.userId, exerciseId: log.exerciseId, date: log.date, sets: newSets, reps: newReps, weightKg: newWeight, createdAt: log.createdAt);
+            _updateInCache(ref, log, updated);
+            Navigator.pop(ctx);
+          }, child: Text(l10n.get('save'))),
+        ],
+      ),
+    );
+  }
+
+  void _updateInCache(WidgetRef ref, WorkoutLog oldLog, WorkoutLog newLog) {
+    // Our cache stores lists of logs per date. We need to replace the old log.
+    // Simplest approach: delete old from Supabase, add new, then reload.
+    AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), oldLog.id);
+    AppDatabase.instance.addWorkoutLog(ref.read(currentUserIdProvider), newLog);
+    try { ref.read(supabaseProvider).addWorkoutLog(newLog); } catch (_) {}
+    ref.invalidate(workoutLogsForDateProvider);
+    // Force cache reload
+    ref.read(workoutLogCacheProvider.notifier).loadDate(date);
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref, WorkoutLog log) {
+    final l10n = ref.read(l10nProvider);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.get('delete')),
+        content: Text(l10n.get('deleteConfirmShort')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.get('cancel'))),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () {
+            AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), log.id);
+            try { ref.read(supabaseProvider).deleteWorkoutLog(log.id); } catch (_) {}
+            ref.invalidate(workoutLogsForDateProvider);
+            ref.read(workoutLogCacheProvider.notifier).loadDate(date);
+            ref.read(workoutCacheProvider.notifier).loadMonth(date);
+            Navigator.pop(ctx);
+          }, child: Text(l10n.get('delete'))),
+        ],
+      ),
+    );
+  }
+
+  BuildContext? _lastContext;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final logsAsync = ref.watch(workoutLogsForDateProvider(date));
+    _lastContext = context;
     final logCache = ref.watch(workoutLogCacheProvider);
     final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final cachedLogs = logCache[dateKey] ?? [];
-    // Use cached logs if available (instant), otherwise fall back to async provider
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final trainUnit = ref.watch(trainingWeightUnitProvider);
-    final l10n = ref.watch(l10nProvider);
-  Widget _buildLogList(List<WorkoutLog> logs, List<Exercise> exercises, L10n l10n, WeightUnit trainUnit) {
-    String exerciseName(String id) {
+    String exName(String id) {
       final ex = exercises.where((e) => e.id == id).firstOrNull;
       if (ex == null) return id;
-      return l10n.exerciseName(ex.id, ex.name);
+      return ref.read(l10nProvider).exerciseName(ex.id, ex.name);
     }
-    if (logs.isEmpty) {
-      return Center(child: Text('No workout for ${DateFormat('MMM d').format(date)}', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)));
-    }
-    final grouped = <String, List<_GroupedSet>>{};
-    for (final log in logs) { grouped.putIfAbsent(log.exerciseId, () => []); grouped[log.exerciseId]!.add(_GroupedSet(log.sets, log.reps, log.weightKg)); }
+
+    return Expanded(
+      child: cachedLogs.isNotEmpty
+          ? _buildLogList(context, ref, cachedLogs, exName, trainUnit)
+          : ref.watch(workoutLogsForDateProvider(date)).when(
+              data: (logs) => _buildLogList(context, ref, logs, exName, trainUnit),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, _) => Center(child: Text(l10n.get('failedToLoad'))),
+            ),
+    );
+  }
+
+  Widget _buildLogList(BuildContext context, WidgetRef ref, List<WorkoutLog> logs, String Function(String) exName, WeightUnit trainUnit) {
+    if (logs.isEmpty) return Center(child: Text('No workout for ${DateFormat('MMM d').format(date)}', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)));
+    final grouped = <String, List<WorkoutLog>>{};
+    for (final log in logs) { grouped.putIfAbsent(log.exerciseId, () => []); grouped[log.exerciseId]!.add(log); }
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       children: grouped.entries.map((entry) => Card(
@@ -120,23 +212,21 @@ class _WorkoutDaySummary extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(exerciseName(entry.key), style: Theme.of(context).textTheme.titleSmall),
+            Text(exName(entry.key), style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 4),
-            ...entry.value.map((s) => Text(formatTrainingWeight(s.weight, trainUnit), style: Theme.of(context).textTheme.bodyMedium)),
+            ...entry.value.map((log) => InkWell(
+              onTap: () => _editWorkout(context, ref, log, exName(entry.key)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(children: [
+                  Expanded(child: Text('${log.sets} x ${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium)),
+                  const Icon(Icons.edit, size: 14, color: Colors.grey),
+                ]),
+              ),
+            )),
           ]),
         ),
       )).toList(),
-    );
-  }
-
-    return Expanded(
-      child: cachedLogs.isNotEmpty
-          ? _buildLogList(cachedLogs, exercises, l10n, trainUnit)
-          : logsAsync.when(
-              data: (logs) => _buildLogList(logs, exercises, l10n, trainUnit),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => Center(child: Text(l10n.get('failedToLoad'))),
-            ),
     );
   }
 }
