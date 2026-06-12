@@ -10,6 +10,7 @@ import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
 import '../../../data/models/workout_template.dart';
+import '../../workout/screens/templates_screen.dart';
 import '../widgets/rest_timer.dart';
 import 'exercise_detail_screen.dart';
 
@@ -33,6 +34,31 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
   final _customSetsCtrl = TextEditingController(text: '3');
   final _customRepsCtrl = TextEditingController();
   final _customWeightCtrl = TextEditingController();
+
+  void _saveAsTemplate() async {
+    final l10n = ref.read(l10nProvider);
+    final nameCtrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save as Template'),
+        content: TextField(controller: nameCtrl, decoration: const InputDecoration(hintText: 'Template name')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.get('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()), child: Text(l10n.get('save'))),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final template = WorkoutTemplate(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: name,
+      exercises: _pendingSets.map((p) => TemplateExercise(exerciseId: p.exerciseId, defaultSets: p.sets, defaultReps: p.reps, defaultWeight: p.weight)).toList(),
+    );
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.saveTemplate(userId, template);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Template "$name" saved')));
+  }
 
   @override
   void dispose() {
@@ -180,6 +206,16 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
         actions: [
           if (_pendingSets.isNotEmpty)
             TextButton.icon(onPressed: _saveAll, icon: const Icon(Icons.save), label: Text('${l10n.get('save')} (${_pendingSets.length})')),
+          IconButton(icon: const Icon(Icons.bookmark_border), tooltip: 'Templates', onPressed: () async {
+            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const TemplatesScreen()));
+            if (result != null && result is WorkoutTemplate) {
+              for (final ex in result.exercises) {
+                _addToPending(ex.exerciseId, ex.defaultSets, ex.defaultReps, ex.defaultWeight);
+              }
+            }
+          }),
+          if (_pendingSets.isNotEmpty)
+            IconButton(icon: const Icon(Icons.bookmark_add), tooltip: 'Save as Template', onPressed: _saveAsTemplate),
         ],
       ),
       body: Column(

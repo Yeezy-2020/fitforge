@@ -5,6 +5,7 @@ import '../models/workout_log.dart';
 import '../models/food.dart';
 import '../models/diet_log.dart';
 import '../models/user_profile.dart';
+import '../models/workout_template.dart';
 import 'exercise_library.dart';
 
 class AppDatabase {
@@ -242,10 +243,26 @@ class AppDatabase {
   }
 
   Future<void> setLastSyncTime(String userId) async {
-    await _storage.write(
-      key: _key(userId, 'last_sync'),
-      value: DateTime.now().toIso8601String(),
-    );
+    await _storage.write(key: _key(userId, 'last_sync'), value: DateTime.now().toIso8601String());
+  }
+
+  // ---- Templates ----
+  Future<List<WorkoutTemplate>> getTemplates(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'templates'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List).map((e) => WorkoutTemplate.fromJson(e)).toList();
+  }
+
+  Future<void> saveTemplate(String userId, WorkoutTemplate template) async {
+    final templates = await getTemplates(userId);
+    templates.add(template);
+    await _storage.write(key: _key(userId, 'templates'), value: jsonEncode(templates.map((t) => t.toJson()).toList()));
+  }
+
+  Future<void> deleteTemplate(String userId, String templateId) async {
+    final templates = await getTemplates(userId);
+    templates.removeWhere((t) => t.id == templateId);
+    await _storage.write(key: _key(userId, 'templates'), value: jsonEncode(templates.map((t) => t.toJson()).toList()));
   }
 
   String _dateStr(DateTime d) =>
