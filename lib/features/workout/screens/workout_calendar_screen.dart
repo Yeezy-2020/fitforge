@@ -110,11 +110,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen> {
                     onTap: () => _edit(context, ref, log, exName(log.exerciseId)),
                     child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
                       ReorderableDragStartListener(index: i, child: const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.drag_handle, size: 20, color: Colors.grey))),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(exName(log.exerciseId), style: Theme.of(context).textTheme.titleSmall),
-                        Text('${log.sets} x ${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium),
-                      ])),
-                      const Icon(Icons.edit, size: 14, color: Colors.grey),
+                      Expanded(child: Text(exName(log.exerciseId), style: Theme.of(context).textTheme.titleMedium)),
+                      Text('${log.sets}×${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
                     ])),
                   ),
                 );
