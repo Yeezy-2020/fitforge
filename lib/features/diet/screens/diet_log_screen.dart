@@ -26,6 +26,11 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
     _loadCurrentDate();
   }
 
+  void _loadCurrentDate() {
+    final date = ref.read(selectedDateProvider);
+    ref.read(dietCacheProvider.notifier).loadDate(date);
+  }
+
   Widget _todayBtn({required VoidCallback onTap, required String text}) {
     return Material(
       color: Colors.transparent,
