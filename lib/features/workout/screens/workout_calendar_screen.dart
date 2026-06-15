@@ -57,7 +57,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              side: const BorderSide(width: 2),
+              side: BorderSide(width: 2, color: Theme.of(context).textTheme.bodyLarge!.color ?? Colors.black87),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
             onPressed: () {
@@ -74,8 +74,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
             padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                side: const BorderSide(width: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                side: BorderSide(width: 2, color: Theme.of(context).textTheme.bodyLarge!.color ?? Colors.black87),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               ),
               onPressed: () {
