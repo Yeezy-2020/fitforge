@@ -45,6 +45,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: const Text('FitForge'),
         actions: [
           IconButton(icon: const Icon(Icons.person_outline), tooltip: l10n.get('account'), onPressed: () => context.push('/profile')),
