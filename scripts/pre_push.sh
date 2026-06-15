@@ -1,38 +1,29 @@
 #!/bin/bash
 # pre_push.sh - Runs before every git push
-# Usage: bash scripts/pre_push.sh
-
 set -e
 export PATH="/opt/flutter/bin:$PATH"
 
-echo "============================================"
-echo "  FitForge Pre-Push Check"
-echo "============================================"
+echo "=== FitForge Check ==="
 
-echo ""
-echo "1/3 flutter analyze..."
-ERRORS=$(flutter analyze 2>&1 | grep -c " error •")
-if [ "$ERRORS" -gt 0 ]; then
-  echo "   FAILED: $ERRORS errors found"
+# 1. Analyze
+echo -n "analyze... "
+if flutter analyze 2>&1 | grep -q " error •"; then
+  echo "FAIL"
+  flutter analyze 2>&1 | grep " error •"
   exit 1
 fi
-echo "   PASSED (0 errors)"
+echo "OK"
 
-echo ""
-echo "2/3 flutter test..."
-flutter test
-if [ $? -ne 0 ]; then
-  echo "ERROR: flutter test failed"
+# 2. Test
+echo -n "test... "
+if ! flutter test 2>&1 | grep -q "All tests passed"; then
+  echo "FAIL"
   exit 1
 fi
-echo "   PASSED"
+echo "OK"
 
-echo ""
-echo "3/3 Widget tree dump (pill buttons)..."
-flutter test test/dump_test.dart 2>&1 | grep "^\[" || true
-echo "   DONE"
+# 3. Dump key elements
+echo "--- Widget Dump ---"
+flutter test test/dump_test.dart 2>&1 | grep "^\[" || echo "(dump skipped)"
 
-echo ""
-echo "============================================"
-echo "  ALL CHECKS PASSED - Ready to push"
-echo "============================================"
+echo "=== All Good ==="
