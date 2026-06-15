@@ -64,8 +64,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         splashColor: c.withValues(alpha: 0.15),
-        child: Container(
-          width: 60, padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Container(
+            width: 130, padding: const EdgeInsets.symmetric(vertical: 4),
           alignment: Alignment.center,
           decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
           child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: c)),
