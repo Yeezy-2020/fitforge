@@ -72,16 +72,6 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
         ],
       ),
       floatingActionButton: null,
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add_workout',
-        onPressed: () {
-          final d = _selectedDay ?? DateTime.now();
-          context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
-        },
-        icon: const Icon(Icons.add), label: Text(l10n.get('logWorkout')),
-      ),
       body: Column(children: [
         AnimatedSize(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut, alignment: Alignment.topCenter,
           child: _collapsed ? const SizedBox.shrink() : TableCalendar(
