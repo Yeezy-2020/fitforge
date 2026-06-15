@@ -119,6 +119,20 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (logs.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.bookmark_add_outlined, size: 20),
+              tooltip: 'Save Template',
+              onPressed: () => _saveMealTemplate(logs),
+            ),
+          IconButton(
+            icon: const Icon(Icons.bookmark_outline, size: 20),
+            tooltip: 'Load Template',
+            onPressed: _loadMealTemplate,
+          ),
+        ]),
+        leadingWidth: 90,
         title: Row(mainAxisSize: MainAxisSize.min, children: [
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 22),
@@ -138,19 +152,6 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
             },
           ),
         ]),
-        actions: [
-          if (logs.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.bookmark_add_outlined),
-              tooltip: 'Save as Meal Template',
-              onPressed: () => _saveMealTemplate(logs),
-            ),
-          IconButton(
-            icon: const Icon(Icons.bookmark_outline),
-            tooltip: 'Load Template',
-            onPressed: () => _loadMealTemplate(),
-          ),
-        ],
       ),
       body: Column(
         children: [
