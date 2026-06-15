@@ -26,6 +26,19 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
     _loadCurrentDate();
   }
 
+  Widget _pill({required VoidCallback onTap, required String text}) {
+    final c = Theme.of(context).colorScheme.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 60, padding: const EdgeInsets.symmetric(vertical: 4),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
+        child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: c)),
+      ),
+    );
+  }
+
   void _loadCurrentDate() {
     final date = ref.read(selectedDateProvider);
     ref.read(dietCacheProvider.notifier).loadDate(date);
@@ -137,6 +150,11 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
           }),
         ]),
         actions: [
+          _pill(text: 'Today', onTap: () {
+            final today = DateTime.now();
+            ref.read(selectedDateProvider.notifier).state = today;
+            ref.read(dietCacheProvider.notifier).loadDate(today);
+          }),
           IconButton(icon: const Icon(Icons.bookmark_outline, size: 20), tooltip: 'Load', onPressed: _loadMealTemplate),
         ],
       ),
