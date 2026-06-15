@@ -68,7 +68,7 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
         Text('${_seconds}s', style: Theme.of(context).textTheme.titleMedium),
         IconButton(icon: const Icon(Icons.add), onPressed: () => _adjust(15)),
         const SizedBox(width: 12),
-        Text(_running ? '${_remaining}s' : 'Ready', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: _running && _remaining <= 10 ? Colors.red : null)),
+            Text(_running || _remaining > 0 ? '${_remaining}s' : 'Ready', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: _remaining <= 10 && _running ? Colors.red : null)),
         const SizedBox(width: 12),
         if (!_running)
           IconButton(icon: const Icon(Icons.play_arrow, color: Colors.green), onPressed: _start)
