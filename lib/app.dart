@@ -53,10 +53,12 @@ class _FitForgeAppState extends ConsumerState<FitForgeApp> with WidgetsBindingOb
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(_routerProvider);
+    final appLocale = ref.watch(localeProvider);
     return MaterialApp.router(
       title: 'FitForge', debugShowCheckedModeBanner: false,
       theme: AppTheme.light, darkTheme: AppTheme.dark, themeMode: ThemeMode.system,
       routerConfig: router,
+      locale: appLocale == AppLocale.zh ? const Locale('zh', 'CN') : const Locale('en', 'US'),
       localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
     );
