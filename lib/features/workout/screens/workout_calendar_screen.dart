@@ -83,9 +83,6 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
             ref.read(selectedDateProvider.notifier).state = today;
           }, text: 'Today'),
         ]),
-        actions: [
-          IconButton(icon: const Icon(Icons.person_outline), onPressed: () => context.push('/profile')),
-        ],
       ),
       floatingActionButton: null,
       body: Column(children: [

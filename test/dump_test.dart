@@ -14,7 +14,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(
       appBar: AppBar(
         title: Row(children: [pill('+ Add Workout'), const Spacer(), const Text('Training'), const Spacer(), pill('Today')]),
-        actions: [IconButton(icon: const Icon(Icons.person_outline), onPressed: () {})],
+        actions: [],
       ),
       body: const SizedBox(),
     )));

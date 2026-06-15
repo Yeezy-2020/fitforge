@@ -44,6 +44,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ];
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('FitForge'),
+        actions: [
+          IconButton(icon: const Icon(Icons.person_outline), tooltip: l10n.get('account'), onPressed: () => context.push('/profile')),
+        ],
+      ),
       body: PageView(
         controller: _pageController,
         onPageChanged: (i) => setState(() => _currentIndex = i),
