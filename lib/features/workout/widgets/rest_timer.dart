@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class RestTimer extends StatefulWidget {
@@ -49,79 +50,42 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
   void _showTimePicker() {
     int mins = _seconds ~/ 60;
     int secs = _seconds % 60;
-    final minCtrl = FixedExtentScrollController(initialItem: mins.clamp(0, 59));
-    final secCtrl = FixedExtentScrollController(initialItem: secs.clamp(0, 59));
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          return SizedBox(
-            height: 260,
-            child: Column(children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                  const Spacer(),
-                  Text('Rest Timer', style: Theme.of(ctx).textTheme.titleMedium),
-                  const Spacer(),
-                  TextButton(onPressed: () {
-                    Navigator.pop(ctx);
-                    setState(() {
-                      _seconds = mins * 60 + secs;
-                      _reset();
-                    });
-                  }, child: const Text('Set', style: TextStyle(fontWeight: FontWeight.bold))),
-                ]),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: Row(children: [
-                  Expanded(child: Column(children: [
-                    const SizedBox(height: 8),
-                    Text('min', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-                    Expanded(
-                  child: ListWheelScrollView.useDelegate(
-                    controller: minCtrl,
-                    itemExtent: 42,
-                    diameterRatio: 1.2,
-                    perspective: 0.005,
-                        onSelectedItemChanged: (i) => setSheetState(() => mins = i),
-                    childDelegate: ListWheelChildBuilderDelegate(
-                      builder: (ctx, i) => Center(child: Text('$i', style: TextStyle(fontSize: 26, fontWeight: i == mins ? FontWeight.bold : FontWeight.normal, color: i == mins ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
-                      childCount: 60,
-                    ),
-                  ),
-                ),
-              ])),
-              const SizedBox(width: 4),
-              const Text(':', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              const SizedBox(width: 4),
-                  Expanded(child: Column(children: [
-                    const SizedBox(height: 8),
-                    Text('sec', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-                    Expanded(
-                    child: ListWheelScrollView.useDelegate(
-                      controller: secCtrl,
-                      itemExtent: 42,
-                      diameterRatio: 1.2,
-                      perspective: 0.005,
-                        onSelectedItemChanged: (i) => setSheetState(() => secs = i),
-                        childDelegate: ListWheelChildBuilderDelegate(
-                          builder: (ctx, i) => Center(child: Text('${i.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 26, fontWeight: i == secs ? FontWeight.bold : FontWeight.normal, color: i == secs ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
-                          childCount: 60,
-                        ),
-                      ),
-                    ),
-                  ])),
-                ]),
-              ),
+      builder: (ctx) => SizedBox(
+        height: 280,
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(children: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              const Spacer(),
+              const Text('Rest Timer', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              const Spacer(),
+              TextButton(onPressed: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _seconds = mins * 60 + secs;
+                  _reset();
+                });
+              }, child: const Text('Set', style: TextStyle(fontWeight: FontWeight.bold))),
             ]),
-          );
-        },
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: CupertinoTimerPicker(
+              mode: CupertinoTimerPickerMode.ms,
+              initialTimerDuration: Duration(minutes: mins, seconds: secs),
+              onTimerDurationChanged: (d) {
+                mins = d.inMinutes;
+                secs = d.inSeconds % 60;
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }
