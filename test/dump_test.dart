@@ -6,9 +6,9 @@ void main() {
     final c = Colors.blue;
     Widget pill(String t) => GestureDetector(
       onTap: () {},
-      child: Container(width: 120, height: 36, alignment: Alignment.center,
-        decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(20)),
-        child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue))),
+      child: Container(width: 120, height: 28, alignment: Alignment.center,
+        decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
+        child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue))),
     );
 
     await tester.pumpWidget(MaterialApp(home: Scaffold(appBar: AppBar(title: Row(mainAxisSize: MainAxisSize.min, children: [

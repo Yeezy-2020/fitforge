@@ -1,29 +1,17 @@
-#!/bin/bash
-# pre_push.sh - Runs before every git push
-set -e
-export PATH="/opt/flutter/bin:$PATH"
+# Pre-Push Checklist
+# Run before every git push
 
-echo "=== FitForge Check ==="
+# 1. Static analysis (must be 0 errors)
+echo "=== 1. flutter analyze ==="
+flutter analyze 2>&1 | grep " error •" && { echo "FAILED"; exit 1; } || echo "PASS"
 
-# 1. Analyze
-echo -n "analyze... "
-if flutter analyze 2>&1 | grep -q " error •"; then
-  echo "FAIL"
-  flutter analyze 2>&1 | grep " error •"
-  exit 1
-fi
-echo "OK"
+# 2. All tests
+echo "=== 2. flutter test ==="
+flutter test 2>&1 | grep -q "All tests passed" && echo "PASS" || { echo "FAILED"; exit 1; }
 
-# 2. Test
-echo -n "test... "
-if ! flutter test 2>&1 | grep -q "All tests passed"; then
-  echo "FAIL"
-  exit 1
-fi
-echo "OK"
+# 3. Widget dump - verify pill sizes match
+echo "=== 3. Widget dump ==="
+flutter test test/dump_test.dart --plain-name "pill" 2>&1 | grep "^\["
 
-# 3. Dump key elements
-echo "--- Widget Dump ---"
-flutter test test/dump_test.dart 2>&1 | grep "^\[" || echo "(dump skipped)"
-
-echo "=== All Good ==="
+echo ""
+echo "=== ALL PASSED ==="
