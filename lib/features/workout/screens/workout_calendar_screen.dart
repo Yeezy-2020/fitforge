@@ -53,9 +53,13 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
     return Scaffold(
       appBar: AppBar(
         leading: Padding(
-          padding: const EdgeInsets.only(left: 12, top: 8, bottom: 8),
+          padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
           child: OutlinedButton(
-            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              side: const BorderSide(width: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
             onPressed: () {
               final d = _selectedDay ?? DateTime.now();
               context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
@@ -63,13 +67,17 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
             child: Text(l10n.get('logWorkout'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
         ),
-        leadingWidth: 140,
-        title: const SizedBox.shrink(),
+        leadingWidth: 130,
+        title: Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
             child: OutlinedButton(
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                side: const BorderSide(width: 2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
               onPressed: () {
                 final today = DateTime.now();
                 setState(() { _focusedDay = today; _selectedDay = today; });
