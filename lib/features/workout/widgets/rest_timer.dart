@@ -55,7 +55,7 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
         child: Container(
           padding: const EdgeInsets.all(8),
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Center(child: Text('Rest Timer: ${_seconds}s  ▸', style: Theme.of(context).textTheme.bodySmall)),
+          child: Center(child: Text('Rest Timer: ${_seconds}s  ▴', style: Theme.of(context).textTheme.bodySmall)),
         ),
       );
     }
@@ -75,7 +75,7 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
         else
           IconButton(icon: const Icon(Icons.pause, color: Colors.orange), onPressed: _pause),
         IconButton(icon: const Icon(Icons.stop), onPressed: _reset),
-        IconButton(icon: const Icon(Icons.keyboard_arrow_up), onPressed: widget.onToggle),
+        IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: widget.onToggle),
       ]),
     );
   }
