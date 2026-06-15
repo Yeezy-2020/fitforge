@@ -26,22 +26,23 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
     _loadCurrentDate();
   }
 
-  Widget _pill({required VoidCallback onTap, required String text}) {
-    final c = Theme.of(context).colorScheme.primary;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 60, padding: const EdgeInsets.symmetric(vertical: 4),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
-        child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: c)),
+  Widget _todayBtn({required VoidCallback onTap, required String text}) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        splashColor: Colors.grey.withValues(alpha: 0.2),
+        highlightColor: Colors.grey.withValues(alpha: 0.1),
+        child: Container(
+          width: 60, padding: const EdgeInsets.symmetric(vertical: 4),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.grey.withValues(alpha: 0.1)),
+          child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey.shade600)),
+        ),
       ),
     );
-  }
-
-  void _loadCurrentDate() {
-    final date = ref.read(selectedDateProvider);
-    ref.read(dietCacheProvider.notifier).loadDate(date);
   }
 
   void _saveMealTemplate(List<DietLog> logs) async {
@@ -150,7 +151,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
           }),
         ]),
         actions: [
-          _pill(text: 'Today', onTap: () {
+          _todayBtn(text: 'Today', onTap: () {
             final today = DateTime.now();
             ref.read(selectedDateProvider.notifier).state = today;
             ref.read(dietCacheProvider.notifier).loadDate(today);
