@@ -11,7 +11,6 @@ import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
 import '../../../data/models/workout_template.dart';
 import '../../workout/screens/templates_screen.dart';
-import '../widgets/rest_timer.dart';
 import 'exercise_detail_screen.dart';
 
 const _uuid = Uuid();
@@ -27,7 +26,6 @@ class WorkoutDayScreen extends ConsumerStatefulWidget {
 class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
   String? _selectedBodyPart;
   List<_PendingSet> _pendingSets = [];
-  bool _timerExpanded = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
   final _customNameCtrl = TextEditingController();
@@ -273,7 +271,6 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             ),
           ),
           Expanded(child: _buildMainContent(l10n, bodyParts, filtered, trainUnit)),
-          RestTimer(expanded: _timerExpanded, onToggle: () => setState(() => _timerExpanded = !_timerExpanded)),
         ],
       ),
     );

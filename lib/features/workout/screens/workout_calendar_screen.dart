@@ -10,6 +10,7 @@ import '../../../core/services/supabase_service.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
+import '../widgets/rest_timer.dart';
 
 class WorkoutCalendarScreen extends ConsumerStatefulWidget {
   const WorkoutCalendarScreen({super.key});
@@ -21,6 +22,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _collapsed = false;
+  bool _timerExpanded = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -140,6 +142,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                       },
                     ),
         ),
+        RestTimer(expanded: _timerExpanded, onToggle: () => setState(() => _timerExpanded = !_timerExpanded)),
       ]),
     );
   }
