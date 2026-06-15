@@ -54,19 +54,19 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
   }
 
   Widget _todayBtn({required VoidCallback onTap, required String text}) {
+    final c = Theme.of(context).colorScheme.primary;
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        splashColor: Colors.grey.withValues(alpha: 0.2),
-        highlightColor: Colors.grey.withValues(alpha: 0.1),
+        splashColor: c.withValues(alpha: 0.15),
         child: Container(
           width: 60, padding: const EdgeInsets.symmetric(vertical: 4),
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.grey.withValues(alpha: 0.1)),
-          child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey.shade600)),
+          decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
+          child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: c)),
         ),
       ),
     );
