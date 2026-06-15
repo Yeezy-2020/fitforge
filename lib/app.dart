@@ -13,6 +13,8 @@ import 'features/body/body_screen.dart';
 import 'core/services/sync_service.dart';
 import 'providers/app_providers.dart';
 import 'core/theme/app_theme.dart';
+import 'providers/settings_providers.dart';
+import 'core/localization/l10n.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
