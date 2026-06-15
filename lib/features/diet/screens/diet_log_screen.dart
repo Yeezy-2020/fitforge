@@ -119,39 +119,26 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (logs.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.bookmark_add_outlined, size: 20),
-              tooltip: 'Save Template',
-              onPressed: () => _saveMealTemplate(logs),
-            ),
-          IconButton(
-            icon: const Icon(Icons.bookmark_outline, size: 20),
-            tooltip: 'Load Template',
-            onPressed: _loadMealTemplate,
-          ),
-        ]),
-        leadingWidth: 90,
+        leading: logs.isNotEmpty
+            ? IconButton(icon: const Icon(Icons.bookmark_add_outlined, size: 20), tooltip: 'Save', onPressed: () => _saveMealTemplate(logs))
+            : null,
+        leadingWidth: 48,
         title: Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left, size: 22),
-            onPressed: () {
-              final newDate = selectedDate.subtract(const Duration(days: 1));
-              ref.read(selectedDateProvider.notifier).state = newDate;
-              ref.read(dietCacheProvider.notifier).loadDate(newDate);
-            },
-          ),
+          IconButton(icon: const Icon(Icons.chevron_left, size: 22), onPressed: () {
+            final d = selectedDate.subtract(const Duration(days: 1));
+            ref.read(selectedDateProvider.notifier).state = d;
+            ref.read(dietCacheProvider.notifier).loadDate(d);
+          }),
           Text('${DateFormat('MMM d').format(selectedDate)} ${l10n.get('diet')}', style: const TextStyle(fontSize: 16)),
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 22),
-            onPressed: () {
-              final newDate = selectedDate.add(const Duration(days: 1));
-              ref.read(selectedDateProvider.notifier).state = newDate;
-              ref.read(dietCacheProvider.notifier).loadDate(newDate);
-            },
-          ),
+          IconButton(icon: const Icon(Icons.chevron_right, size: 22), onPressed: () {
+            final d = selectedDate.add(const Duration(days: 1));
+            ref.read(selectedDateProvider.notifier).state = d;
+            ref.read(dietCacheProvider.notifier).loadDate(d);
+          }),
         ]),
+        actions: [
+          IconButton(icon: const Icon(Icons.bookmark_outline, size: 20), tooltip: 'Load', onPressed: _loadMealTemplate),
+        ],
       ),
       body: Column(
         children: [
