@@ -45,36 +45,124 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
 
   void _pause() { _running = false; _anim.stop(); setState(() {}); }
   void _reset() { _running = false; _remaining = 0; _anim.reset(); setState(() {}); }
-  void _adjust(int delta) { _seconds = (_seconds + delta).clamp(5, 600); _reset(); }
+
+  void _showTimePicker() {
+    int mins = _seconds ~/ 60;
+    int secs = _seconds % 60;
+    final minCtrl = FixedExtentScrollController(initialItem: mins.clamp(0, 10));
+    final secCtrl = FixedExtentScrollController(initialItem: secs.clamp(0, 59));
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return SizedBox(
+            height: 260,
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(children: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  const Spacer(),
+                  Text('Rest Timer', style: Theme.of(ctx).textTheme.titleMedium),
+                  const Spacer(),
+                  TextButton(onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _seconds = mins * 60 + secs;
+                      _reset();
+                    });
+                  }, child: const Text('Set', style: TextStyle(fontWeight: FontWeight.bold))),
+                ]),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: Row(children: [
+                  Expanded(child: Column(children: [
+                    const SizedBox(height: 8),
+                    Text('min', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                    Expanded(
+                      child: ListWheelScrollView.useDelegate(
+                        controller: minCtrl,
+                        itemExtent: 42,
+                        diameterRatio: 1.5,
+                        onSelectedItemChanged: (i) => setSheetState(() => mins = i),
+                        childDelegate: ListWheelChildBuilderDelegate(
+                          builder: (ctx, i) => Center(child: Text('$i', style: TextStyle(fontSize: 26, fontWeight: i == mins ? FontWeight.bold : FontWeight.normal, color: i == mins ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
+                          childCount: 11,
+                        ),
+                      ),
+                    ),
+                  ])),
+                  const Text(':', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+                  Expanded(child: Column(children: [
+                    const SizedBox(height: 8),
+                    Text('sec', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                    Expanded(
+                      child: ListWheelScrollView.useDelegate(
+                        controller: secCtrl,
+                        itemExtent: 42,
+                        diameterRatio: 1.5,
+                        onSelectedItemChanged: (i) => setSheetState(() => secs = i),
+                        childDelegate: ListWheelChildBuilderDelegate(
+                          builder: (ctx, i) => Center(child: Text('${i.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 26, fontWeight: i == secs ? FontWeight.bold : FontWeight.normal, color: i == secs ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
+                          childCount: 60,
+                        ),
+                      ),
+                    ),
+                  ])),
+                ]),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mins = _seconds ~/ 60;
+    final secs = _seconds % 60;
+    final timeLabel = '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+
     if (!widget.expanded) {
       return GestureDetector(
         onTap: widget.onToggle,
         child: Container(
           padding: const EdgeInsets.all(8),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Center(child: Text('Rest Timer: ${_seconds}s  ▴', style: Theme.of(context).textTheme.bodySmall)),
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Center(child: Text('Rest: $timeLabel  ▴', style: theme.textTheme.bodySmall)),
         ),
       );
     }
 
     return Container(
       padding: const EdgeInsets.all(12),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: theme.colorScheme.surfaceContainerHighest,
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        IconButton(icon: const Icon(Icons.remove), onPressed: () => _adjust(-15)),
-        Text('${_seconds}s', style: Theme.of(context).textTheme.titleMedium),
-        IconButton(icon: const Icon(Icons.add), onPressed: () => _adjust(15)),
-        const SizedBox(width: 12),
-            Text(_running || _remaining > 0 ? '${_remaining}s' : 'Ready', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: _remaining <= 10 && _running ? Colors.red : null)),
-        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: _showTimePicker,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              border: Border.all(width: 2, color: theme.colorScheme.primary),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(timeLabel, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Text(_running ? '${_remaining}s' : 'Ready', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: _remaining <= 10 && _running ? Colors.red : null)),
+        const SizedBox(width: 16),
         if (!_running)
-          IconButton(icon: const Icon(Icons.play_arrow, color: Colors.green), onPressed: _start)
+          IconButton(icon: const Icon(Icons.play_arrow, color: Colors.green, size: 32), onPressed: _start)
         else
-          IconButton(icon: const Icon(Icons.pause, color: Colors.orange), onPressed: _pause),
-        IconButton(icon: const Icon(Icons.stop), onPressed: _reset),
+          IconButton(icon: const Icon(Icons.pause, color: Colors.orange, size: 32), onPressed: _pause),
+        IconButton(icon: const Icon(Icons.stop, size: 28), onPressed: _reset),
         IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: widget.onToggle),
       ]),
     );
