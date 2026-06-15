@@ -41,7 +41,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 120, height: 28,
+        width: 130,
+        padding: const EdgeInsets.symmetric(vertical: 4),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           border: Border.all(width: 2, color: c),
@@ -68,25 +69,21 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
 
     return Scaffold(
       appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: _pill(
-            onTap: () {
-              final d = _selectedDay ?? DateTime.now();
-              context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
-            },
-            text: l10n.get('logWorkout'),
-          ),
-        ),
-        leadingWidth: 130,
-        title: Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
-        centerTitle: true,
-        actions: [
+        title: Row(children: [
+          _pill(onTap: () {
+            final d = _selectedDay ?? DateTime.now();
+            context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
+          }, text: l10n.get('logWorkout')),
+          const Spacer(),
+          Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
+          const Spacer(),
           _pill(onTap: () {
             final today = DateTime.now();
             setState(() { _focusedDay = today; _selectedDay = today; });
             ref.read(selectedDateProvider.notifier).state = today;
           }, text: 'Today'),
+        ]),
+        actions: [
           IconButton(icon: const Icon(Icons.person_outline), onPressed: () => context.push('/profile')),
         ],
       ),
