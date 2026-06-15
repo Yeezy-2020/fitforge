@@ -52,22 +52,31 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.get('training')),
-        actions: [
-          TextButton(
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 8, bottom: 8),
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
             onPressed: () {
               final d = _selectedDay ?? DateTime.now();
               context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
             },
-            child: Text(l10n.get('logWorkout'), style: const TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(l10n.get('logWorkout'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
-          TextButton(
-            onPressed: () {
-              final today = DateTime.now();
-              setState(() { _focusedDay = today; _selectedDay = today; });
-              ref.read(selectedDateProvider.notifier).state = today;
-            },
-            child: const Text('Today', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        leadingWidth: 140,
+        title: const SizedBox.shrink(),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+              onPressed: () {
+                final today = DateTime.now();
+                setState(() { _focusedDay = today; _selectedDay = today; });
+                ref.read(selectedDateProvider.notifier).state = today;
+              },
+              child: const Text('Today', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
           ),
         ],
       ),
