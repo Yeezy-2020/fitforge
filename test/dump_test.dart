@@ -35,6 +35,6 @@ void main() {
 
     final personIcons = find.byIcon(Icons.person_outline).evaluate().toList();
     print('[person_outline icons: ${personIcons.length}]');
-    expect(personIcons.length, 1, reason: 'Should have exactly 1 account icon, found ${personIcons.length}');
+    expect(personIcons.length, 0, reason: 'person_outline should only be in HomeShell, not calendar');
   });
 }
