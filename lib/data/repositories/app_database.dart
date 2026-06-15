@@ -265,6 +265,30 @@ class AppDatabase {
     await _storage.write(key: _key(userId, 'templates'), value: jsonEncode(templates.map((t) => t.toJson()).toList()));
   }
 
+  // ---- Meal Templates ----
+  Future<List<String>> getMealTemplates(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'meal_templates'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List).map((e) => e['name'] as String).toList();
+  }
+
+  Future<void> saveMealTemplate(String userId, String name, String data) async {
+    final templates = await _storage.read(key: _key(userId, 'meal_templates'));
+    final list = templates != null ? (jsonDecode(templates) as List) : [];
+    list.add({'name': name, 'data': data});
+    await _storage.write(key: _key(userId, 'meal_templates'), value: jsonEncode(list));
+  }
+
+  Future<String?> getMealTemplateData(String userId, String name) async {
+    final data = await _storage.read(key: _key(userId, 'meal_templates'));
+    if (data == null) return null;
+    final list = jsonDecode(data) as List;
+    for (final item in list) {
+      if (item['name'] == name) return item['data'] as String;
+    }
+    return null;
+  }
+
   String _dateStr(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'

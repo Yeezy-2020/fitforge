@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:convert';
 import '../../../data/models/diet_log.dart';
 import '../../../data/models/food.dart';
 import '../../../core/localization/l10n.dart';
@@ -28,6 +29,65 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
   void _loadCurrentDate() {
     final date = ref.read(selectedDateProvider);
     ref.read(dietCacheProvider.notifier).loadDate(date);
+  }
+
+  void _saveMealTemplate(List<DietLog> logs) async {
+    final l10n = ref.read(l10nProvider);
+    final nameCtrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save Meal Template'),
+        content: TextField(controller: nameCtrl, decoration: const InputDecoration(hintText: 'Template name')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.get('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()), child: Text(l10n.get('save'))),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final userId = ref.read(currentUserIdProvider);
+    final data = logs.map((l) => l.toJson()).toList();
+    final json = jsonEncode({'name': name, 'items': data});
+    await AppDatabase.instance.saveMealTemplate(userId, name, json);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Template "$name" saved')));
+  }
+
+  void _loadMealTemplate() async {
+    final userId = ref.read(currentUserIdProvider);
+    final templates = await AppDatabase.instance.getMealTemplates(userId);
+    if (!mounted) return;
+    if (templates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No templates saved')));
+      return;
+    }
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Meal Templates'),
+        children: templates.map((t) => SimpleDialogOption(
+          onPressed: () => Navigator.pop(ctx, t),
+          child: Text(t),
+        )).toList(),
+      ),
+    );
+    if (selected == null) return;
+    // Apply template: load the saved foods for today
+    final userId2 = ref.read(currentUserIdProvider);
+    final data = await AppDatabase.instance.getMealTemplateData(userId2, selected);
+    if (data != null) {
+      try {
+        final list = jsonDecode(data) as List;
+        final date = ref.read(selectedDateProvider);
+        for (final item in list) {
+          final log = DietLog.fromJson(item as Map<String, dynamic>);
+          final newLog = DietLog(id: _uuid.v4(), userId: userId2, foodId: log.foodId, date: date, mealType: log.mealType, grams: log.grams, calories: log.calories, createdAt: DateTime.now());
+          ref.read(dietCacheProvider.notifier).addLog(newLog);
+          AppDatabase.instance.addDietLog(userId2, newLog);
+        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Template applied')));
+      } catch (_) {}
+    }
   }
 
   @override
@@ -58,7 +118,40 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('${DateFormat('MMM d').format(selectedDate)} ${l10n.get('diet')}')),
+      appBar: AppBar(
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 22),
+            onPressed: () {
+              final newDate = selectedDate.subtract(const Duration(days: 1));
+              ref.read(selectedDateProvider.notifier).state = newDate;
+              ref.read(dietCacheProvider.notifier).loadDate(newDate);
+            },
+          ),
+          Text('${DateFormat('MMM d').format(selectedDate)} ${l10n.get('diet')}', style: const TextStyle(fontSize: 16)),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 22),
+            onPressed: () {
+              final newDate = selectedDate.add(const Duration(days: 1));
+              ref.read(selectedDateProvider.notifier).state = newDate;
+              ref.read(dietCacheProvider.notifier).loadDate(newDate);
+            },
+          ),
+        ]),
+        actions: [
+          if (logs.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.bookmark_add_outlined),
+              tooltip: 'Save as Meal Template',
+              onPressed: () => _saveMealTemplate(logs),
+            ),
+          IconButton(
+            icon: const Icon(Icons.bookmark_outline),
+            tooltip: 'Load Template',
+            onPressed: () => _loadMealTemplate(),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           if (totalKcal > 0 || totalProtein > 0)
