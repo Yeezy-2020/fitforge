@@ -56,15 +56,22 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
         actions: [
           TextButton(
             onPressed: () {
+              final d = _selectedDay ?? DateTime.now();
+              context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
+            },
+            child: Text(l10n.get('logWorkout'), style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          TextButton(
+            onPressed: () {
               final today = DateTime.now();
-              setState(() {
-                _focusedDay = today;
-                _selectedDay = today;
-              });
+              setState(() { _focusedDay = today; _selectedDay = today; });
               ref.read(selectedDateProvider.notifier).state = today;
             },
             child: const Text('Today', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+        ],
+      ),
+      floatingActionButton: null,
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
