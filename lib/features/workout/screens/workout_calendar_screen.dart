@@ -36,6 +36,22 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
   }
 
+  Widget _pill({required VoidCallback onTap, required String text}) {
+    final c = Theme.of(context).colorScheme.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 120, height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(width: 2, color: c),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: c)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // for AutomaticKeepAliveClientMixin
@@ -52,43 +68,24 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
 
     return Scaffold(
       appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
-          child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                fixedSize: const Size(130, 36),
-                side: BorderSide(width: 2, color: Theme.of(context).colorScheme.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              ),
-              onPressed: () {
-                final d = _selectedDay ?? DateTime.now();
-                context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
-              },
-              child: Text(l10n.get('logWorkout'), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Theme.of(context).colorScheme.primary)),
-            ),
-          ),
-          leadingWidth: 130,
-          title: Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  fixedSize: const Size(130, 36),
-                  side: BorderSide(width: 2, color: Theme.of(context).colorScheme.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: () {
-                  final today = DateTime.now();
-                  setState(() { _focusedDay = today; _selectedDay = today; });
-                  ref.read(selectedDateProvider.notifier).state = today;
-                },
-                child: Text('Today', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Theme.of(context).colorScheme.primary)),
-              ),
-            ),
-          ],
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          _pill(onTap: () {
+            final d = _selectedDay ?? DateTime.now();
+            context.push('/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}');
+          }, text: l10n.get('logWorkout')),
+          const SizedBox(width: 8),
+          Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 8),
+          _pill(onTap: () {
+            final today = DateTime.now();
+            setState(() { _focusedDay = today; _selectedDay = today; });
+            ref.read(selectedDateProvider.notifier).state = today;
+          }, text: 'Today'),
+          const SizedBox(width: 8),
+        ]),
+        actions: [
+          IconButton(icon: const Icon(Icons.person_outline), onPressed: () => context.push('/profile')),
+        ],
       ),
       floatingActionButton: null,
       body: Column(children: [
