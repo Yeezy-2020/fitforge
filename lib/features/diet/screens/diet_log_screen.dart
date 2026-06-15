@@ -39,8 +39,8 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         splashColor: Colors.grey.withValues(alpha: 0.15),
-        child: Container(
-          width: 60, padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           alignment: Alignment.center,
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
           child: Text(text, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey.shade600)),

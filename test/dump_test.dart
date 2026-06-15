@@ -4,11 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('pill check', (tester) async {
     final c = Colors.blue;
-    Widget pill(String t) => GestureDetector(
-      onTap: () {},
-      child: Container(width: 130, padding: const EdgeInsets.symmetric(vertical: 4), alignment: Alignment.center,
-        decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
-        child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue))),
+    Widget pill(String t) => Material(color: Colors.transparent, borderRadius: BorderRadius.circular(16),
+      child: InkWell(onTap: () {}, borderRadius: BorderRadius.circular(16),
+        child: Container(width: 130, padding: const EdgeInsets.symmetric(vertical: 4), alignment: Alignment.center,
+          decoration: BoxDecoration(border: Border.all(width: 2, color: c), borderRadius: BorderRadius.circular(16)),
+          child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue))),
+      ),
     );
 
     await tester.pumpWidget(MaterialApp(home: Scaffold(
