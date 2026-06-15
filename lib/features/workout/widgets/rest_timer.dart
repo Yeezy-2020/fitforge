@@ -49,7 +49,7 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
   void _showTimePicker() {
     int mins = _seconds ~/ 60;
     int secs = _seconds % 60;
-    final minCtrl = FixedExtentScrollController(initialItem: mins.clamp(0, 10));
+    final minCtrl = FixedExtentScrollController(initialItem: mins.clamp(0, 59));
     final secCtrl = FixedExtentScrollController(initialItem: secs.clamp(0, 59));
 
     showModalBottomSheet(
@@ -84,27 +84,31 @@ class _RestTimerState extends State<RestTimer> with TickerProviderStateMixin {
                     const SizedBox(height: 8),
                     Text('min', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                     Expanded(
-                      child: ListWheelScrollView.useDelegate(
-                        controller: minCtrl,
-                        itemExtent: 42,
-                        diameterRatio: 1.5,
+                  child: ListWheelScrollView.useDelegate(
+                    controller: minCtrl,
+                    itemExtent: 42,
+                    diameterRatio: 1.2,
+                    perspective: 0.005,
                         onSelectedItemChanged: (i) => setSheetState(() => mins = i),
-                        childDelegate: ListWheelChildBuilderDelegate(
-                          builder: (ctx, i) => Center(child: Text('$i', style: TextStyle(fontSize: 26, fontWeight: i == mins ? FontWeight.bold : FontWeight.normal, color: i == mins ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
-                          childCount: 11,
-                        ),
-                      ),
+                    childDelegate: ListWheelChildBuilderDelegate(
+                      builder: (ctx, i) => Center(child: Text('$i', style: TextStyle(fontSize: 26, fontWeight: i == mins ? FontWeight.bold : FontWeight.normal, color: i == mins ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
+                      childCount: 60,
                     ),
-                  ])),
-                  const Text(':', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ])),
+              const SizedBox(width: 4),
+              const Text(':', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 4),
                   Expanded(child: Column(children: [
                     const SizedBox(height: 8),
                     Text('sec', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                     Expanded(
-                      child: ListWheelScrollView.useDelegate(
-                        controller: secCtrl,
-                        itemExtent: 42,
-                        diameterRatio: 1.5,
+                    child: ListWheelScrollView.useDelegate(
+                      controller: secCtrl,
+                      itemExtent: 42,
+                      diameterRatio: 1.2,
+                      perspective: 0.005,
                         onSelectedItemChanged: (i) => setSheetState(() => secs = i),
                         childDelegate: ListWheelChildBuilderDelegate(
                           builder: (ctx, i) => Center(child: Text('${i.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 26, fontWeight: i == secs ? FontWeight.bold : FontWeight.normal, color: i == secs ? Theme.of(ctx).colorScheme.primary : Colors.grey))),
