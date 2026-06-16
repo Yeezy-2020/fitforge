@@ -7,6 +7,7 @@ import '../../../core/utils/nutrition_calculator.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
+import '../../../data/repositories/app_database.dart';
 
 class NutritionPlanScreen extends ConsumerStatefulWidget {
   const NutritionPlanScreen({super.key});
