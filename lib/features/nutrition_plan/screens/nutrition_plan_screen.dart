@@ -88,7 +88,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
             _lastStep = _step;
             final offset = _step > last ? 1.0 : -1.0;
             return SlideTransition(
-              position: Tween<Offset>(begin: Offset(offset, 0), end: Offset.zero).animate(animation),
+              position: Tween<Offset>(begin: Offset(-offset, 0), end: Offset.zero).animate(animation),
               child: child,
             );
           },
