@@ -60,7 +60,11 @@ class NutritionPlanScreen extends ConsumerWidget {
             _infoRow('TDEE', '${calc.tdee(calc.bmr(profile), 1.55).toStringAsFixed(0)} kcal'),
           ]))),
           const SizedBox(height: 12),
-          OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.workspace_premium), label: const Text('Select Plan (Pro)')),
+          OutlinedButton.icon(
+            onPressed: () => _showPlanPicker(context, ref, profile),
+            icon: const Icon(Icons.workspace_premium),
+            label: const Text('Select Plan (Pro)'),
+          ),
         ])),
       );
     }
@@ -177,5 +181,45 @@ class NutritionPlanScreen extends ConsumerWidget {
       if (e.value == f) return e.key;
     }
     return f.toString();
+  }
+
+  static void _showPlanPicker(BuildContext context, WidgetRef ref, UserProfile profile) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Select Your Plan', style: Theme.of(ctx).textTheme.titleLarge),
+          const SizedBox(height: 16),
+          _planCard(ctx, 'Carb Cycling', 'High/Medium/Low carb days based on training intensity', 'carb_cycle'),
+          const SizedBox(height: 8),
+          _planCard(ctx, 'Carb Taper', 'Gradual carb reduction with refeed days', 'carb_taper'),
+          const SizedBox(height: 8),
+          _planCard(ctx, 'Bulk', 'Controlled calorie surplus for muscle gain', 'bulk'),
+        ]),
+      ),
+    );
+  }
+
+  static Widget _planCard(BuildContext ctx, String title, String desc, String planType) {
+    return ListTile(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.pop(ctx);
+        final config = NutritionPlanConfig(
+          planType: planType,
+          deficit: planType != 'bulk' ? 500 : 0,
+          surplus: planType == 'bulk' ? 500 : 0,
+          cycleTemplate: planType == 'carb_cycle' ? ['low','low','medium','low','medium','medium','high'] : null,
+        );
+        Navigator.of(ctx).push(MaterialPageRoute(
+          builder: (_) => ProviderScope(child: NutritionPlanScreen(config: config)),
+        ));
+      },
+    );
   }
 }
