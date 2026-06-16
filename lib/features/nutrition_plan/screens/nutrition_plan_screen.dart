@@ -22,6 +22,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   String _experience = 'intermediate';
   double _activityFactor = 1.55;
   List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
+  int? _lastStep;
 
   static const _activityLabels = ['Sedentary', 'Lightly Active', 'Moderate', 'Very Active', 'Extremely Active'];
   static const _activityFrequency = ['0-1 ×/week', '1-2 ×/week', '3-4 ×/week', '5-6 ×/week', '6-7 ×/week'];
@@ -78,7 +79,24 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
       appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
       body: Padding(padding: const EdgeInsets.all(24), child: Column(children: [
         _stepper(), const SizedBox(height: 32),
-        Expanded(child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _stepActivity(l10n, isEn)),
+        Expanded(child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) {
+            final last = _lastStep ?? _step;
+            _lastStep = _step;
+            final offset = _step > last ? 1.0 : -1.0;
+            return SlideTransition(
+              position: Tween<Offset>(begin: Offset(offset, 0), end: Offset.zero).animate(animation),
+              child: child,
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey(_step),
+            child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _stepActivity(l10n, isEn),
+          ),
+        )),
         const SizedBox(height: 16),
         Row(children: [
           if (_step > 0) TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
