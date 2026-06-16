@@ -99,9 +99,10 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         )),
         const SizedBox(height: 16),
         Row(children: [
-          if (_step > 0) TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
-          const Spacer(),
+              if (_step > 0) TextButton(onPressed: () { _lastStep = _step; setState(() => _step--); }, child: const Text('Back')),
+              const Spacer(),
               FilledButton(onPressed: () {
+                _lastStep = _step;
                 if (_step == 2) { _savePlan(); setState(() => _step = 3); } else { setState(() => _step++); }
               }, child: Text(_step == 2 ? 'Get Started' : 'Next')),
         ]),
