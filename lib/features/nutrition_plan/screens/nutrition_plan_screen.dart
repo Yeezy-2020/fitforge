@@ -33,9 +33,35 @@ class NutritionPlanScreen extends ConsumerWidget {
 
     final planConfig = config;
     if (planConfig == null) {
+      // Fallback: use legacy calculation based on profile goal
+      final legacy = calc.calculateLegacy(profile);
       return Scaffold(
         appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
-        body: Center(child: Text('No plan active. Go to Pro to select a plan.')),
+        body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
+          Card(
+            child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
+              Row(children: [
+                Text(l10n.get('nutritionPlan'), style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                _pill(ctx: context, label: profile.goal == FitnessGoal.loseFat ? 'Cut' : profile.goal == FitnessGoal.buildMuscle ? 'Bulk' : 'Maintain'),
+              ]),
+              const SizedBox(height: 12),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                _stat(l10n.get('target'), '${legacy.tdee.toStringAsFixed(0)}', 'kcal', Theme.of(context).colorScheme.primary),
+                _stat(l10n.get('protein'), '${legacy.protein.toStringAsFixed(0)}', 'g', Colors.blue),
+                _stat(l10n.get('carbs'), '${legacy.carbs.toStringAsFixed(0)}', 'g', Colors.orange),
+                _stat(l10n.get('fat'), '${legacy.fat.toStringAsFixed(0)}', 'g', Colors.red),
+              ]),
+            ])),
+          ),
+          const SizedBox(height: 12),
+          Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+            _infoRow('BMR', '${calc.bmr(profile).toStringAsFixed(0)} kcal'),
+            _infoRow('TDEE', '${calc.tdee(calc.bmr(profile), 1.55).toStringAsFixed(0)} kcal'),
+          ]))),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.workspace_premium), label: const Text('Select Plan (Pro)')),
+        ])),
       );
     }
 
