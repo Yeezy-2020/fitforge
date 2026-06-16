@@ -83,7 +83,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
     final k = '${_focusedDay.year}-${_focusedDay.month.toString().padLeft(2, '0')}';
     final workoutDates = cache[k] ?? {};
     final cycleTemplate = ref.watch(nutritionCycleProvider);
-    final dietDates = ref.watch(dietDatesProvider);
+    final dietCache = ref.watch(dietCacheProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final logCache = ref.watch(workoutLogCacheProvider);
     final dk = _selectedDay != null ? '${_selectedDay!.year}-${_selectedDay!.month.toString().padLeft(2, '0')}-${_selectedDay!.day.toString().padLeft(2, '0')}' : '';
@@ -124,7 +124,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                 calendarBuilders: CalendarBuilders(markerBuilder: (c, d, _) {
                   final dateKey = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
                   final hasWorkout = workoutDates.any((w) => isSameDay(w, d));
-                  final hasDiet = dietDates.contains(dateKey);
+                  final hasDiet = (dietCache[dateKey] ?? []).isNotEmpty;
                   final hasCycle = cycleTemplate != null;
                   if (!hasWorkout && !hasDiet && !hasCycle) return null;
                   return Positioned(bottom: 1, child: Row(mainAxisSize: MainAxisSize.min, children: [
