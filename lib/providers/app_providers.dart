@@ -23,6 +23,28 @@ final isOnlineProvider = StateProvider<bool>((ref) => true);
 // Share nutrition plan with calendar for carb cycle markers
 final nutritionCycleProvider = StateProvider<List<String>?>((ref) => null);
 
+// Track which dates have diet logs (for calendar green dots)
+class DietDatesNotifier extends StateNotifier<Set<String>> {
+  final SupabaseService _supabase;
+  DietDatesNotifier(this._supabase) : super({});
+
+  String _k(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  void addDate(DateTime d) { state = {...state, _k(d)}; }
+  void loadMonth(int year, int month) async {
+    try {
+      final firstDay = DateTime(year, month, 1);
+      final lastDay = DateTime(year, month + 1, 0);
+      final logs = await _supabase.getDietLogs(firstDay);
+      for (final log in logs) { state = {...state, _k(log.date)}; }
+    } catch (_) {}
+  }
+}
+
+final dietDatesProvider = StateNotifierProvider<DietDatesNotifier, Set<String>>(
+  (ref) => DietDatesNotifier(ref.read(supabaseProvider)),
+);
+
 final isProProvider = StateProvider<bool>((ref) => false);
 
 // ===== Profile =====

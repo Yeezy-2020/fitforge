@@ -276,8 +276,9 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
                       final calories = food.caloriesPer100g * (grams / 100);
                       final log = DietLog(id: _uuid.v4(), userId: ref.read(currentUserIdProvider),
                           foodId: selectedFoodId!, date: date, mealType: selectedMeal, grams: grams, calories: calories, createdAt: DateTime.now());
-                      ref.read(dietCacheProvider.notifier).addLog(log);
                       AppDatabase.instance.addDietLog(ref.read(currentUserIdProvider), log);
+                      ref.read(dietCacheProvider.notifier).addLog(log);
+                      ref.read(dietDatesProvider.notifier).addDate(date);
                       try { await ref.read(supabaseProvider).addDietLog(log); } catch (_) {}
                       if (ctx.mounted) Navigator.of(ctx).pop();
                     },
