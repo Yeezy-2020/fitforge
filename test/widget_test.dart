@@ -25,13 +25,13 @@ void main() {
   group('NutritionCalculator', () {
     final profile = UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.loseFat);
     test('cutting generates lower calories than maintain', () {
-      final cut = const NutritionCalculator().calculate(profile);
-      final maintain = const NutritionCalculator().calculate(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
+      final cut = const NutritionCalculator().calculateLegacy(profile);
+      final maintain = const NutritionCalculator().calculateLegacy(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
       expect(cut.tdee, lessThan(maintain.tdee));
     });
     test('cutting protein higher than maintain', () {
-      final cut = const NutritionCalculator().calculate(profile);
-      final maintain = const NutritionCalculator().calculate(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
+      final cut = const NutritionCalculator().calculateLegacy(profile);
+      final maintain = const NutritionCalculator().calculateLegacy(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
       expect(cut.protein, greaterThan(maintain.protein));
     });
   });

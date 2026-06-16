@@ -243,39 +243,88 @@ void main() {
     final calc = const NutritionCalculator();
 
     test('BMR male formula correct', () {
-      // Mifflin-St Jeor: 10*80 + 6.25*180 - 5*30 + 5 = 800 + 1125 - 150 + 5 = 1780
-      final result = calc.getTdeeAndBmr(male);
-      expect(result.bmr, closeTo(1780, 1));
+      final result = calc.bmr(male);
+      expect(result, closeTo(1780, 1));
     });
 
     test('BMR female formula correct', () {
-      // Mifflin-St Jeor: 10*60 + 6.25*165 - 5*30 - 161 = 600 + 1031.25 - 150 - 161 = 1320.25
-      final result = calc.getTdeeAndBmr(female);
-      expect(result.bmr, closeTo(1320.25, 1));
+      final result = calc.bmr(female);
+      expect(result, closeTo(1320.25, 1));
     });
 
     test('cutting calories lower than TDEE', () {
-      final cut = calc.calculate(male.copyWith(goal: FitnessGoal.loseFat));
-      final result = calc.getTdeeAndBmr(male);
-      expect(cut.tdee, lessThan(result.tdee));
+      final cut = calc.calculateLegacy(male.copyWith(goal: FitnessGoal.loseFat));
+      final t = calc.tdee(calc.bmr(male), 1.55);
+      expect(cut.tdee, lessThan(t));
     });
 
     test('bulking calories higher than TDEE', () {
-      final bulk = calc.calculate(male);
-      final result = calc.getTdeeAndBmr(male);
-      expect(bulk.tdee, greaterThan(result.tdee));
+      final bulk = calc.calculateLegacy(male);
+      final t = calc.tdee(calc.bmr(male), 1.55);
+      expect(bulk.tdee, greaterThan(t));
     });
 
     test('cutting has higher protein ratio', () {
-      final cut = calc.calculate(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.loseFat));
-      final maintain = calc.calculate(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
+      final cut = calc.calculateLegacy(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.loseFat));
+      final maintain = calc.calculateLegacy(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
       expect(cut.protein, greaterThan(maintain.protein));
     });
 
     test('all goals return positive values', () {
       for (final goal in FitnessGoal.values) {
         final p = UserProfile(id: 't', gender: Gender.male, age: 30, heightCm: 180, weightKg: 80, goal: goal);
-        final r = calc.calculate(p);
+        final r = calc.calculateLegacy(p);
+        expect(r.protein, greaterThan(0));
+        expect(r.carbs, greaterThan(0));
+        expect(r.fat, greaterThan(0));
+        expect(r.tdee, greaterThan(0));
+      }
+    });
+
+    test('carb cycle high day uses 0.5 carb ratio', () {
+      final r = calc.carbCycleDay(male, 'high', 1.55, 500);
+      expect(r.protein, greaterThan(0));
+      expect(r.carbs, greaterThan(r.fat));
+    });
+
+    test('carb cycle low day uses 0.15 carb ratio', () {
+      final r = calc.carbCycleDay(male, 'low', 1.55, 500);
+      expect(r.carbs, lessThan(r.protein));
+    });
+
+    test('bulk beginner uses higher carbs than advanced', () {
+      final rBeginner = calc.bulk(male, 1.55, 500, 'beginner');
+      final rAdvanced = calc.bulk(male, 1.55, 500, 'advanced');
+      expect(rBeginner.carbs, greaterThan(rAdvanced.carbs));
+    });
+
+    test('BMR female formula correct', () {
+      final result = calc.bmr(female);
+      expect(result, closeTo(1320.25, 1));
+    });
+
+    test('cutting calories lower than TDEE', () {
+      final cut = calc.calculateLegacy(male.copyWith(goal: FitnessGoal.loseFat));
+      final t = calc.tdee(calc.bmr(male), 1.55);
+      expect(cut.tdee, lessThan(t));
+    });
+
+    test('bulking calories higher than TDEE', () {
+      final bulk = calc.calculateLegacy(male);
+      final t = calc.tdee(calc.bmr(male), 1.55);
+      expect(bulk.tdee, greaterThan(t));
+    });
+
+    test('cutting has higher protein ratio', () {
+      final cut = calc.calculateLegacy(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.loseFat));
+      final maintain = calc.calculateLegacy(UserProfile(id: 't', gender: Gender.male, age: 25, heightCm: 175, weightKg: 80, goal: FitnessGoal.maintain));
+      expect(cut.protein, greaterThan(maintain.protein));
+    });
+
+    test('all goals return positive values', () {
+      for (final goal in FitnessGoal.values) {
+        final p = UserProfile(id: 't', gender: Gender.male, age: 30, heightCm: 180, weightKg: 80, goal: goal);
+        final r = calc.calculateLegacy(p);
         expect(r.protein, greaterThan(0));
         expect(r.carbs, greaterThan(0));
         expect(r.fat, greaterThan(0));

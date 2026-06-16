@@ -67,7 +67,7 @@ final nutritionPlanProvider = Provider<({
 })?>((ref) {
   final profile = ref.watch(userProfileProvider).valueOrNull;
   if (profile == null) return null;
-  return const NutritionCalculator().calculate(profile);
+  return const NutritionCalculator().calculateLegacy(profile);
 });
 
 // ===== Exercises =====

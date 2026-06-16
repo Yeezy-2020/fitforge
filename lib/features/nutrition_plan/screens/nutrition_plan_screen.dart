@@ -1,333 +1,155 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import '../../../data/models/nutrition_plan.dart';
+import '../../../data/models/user_profile.dart';
+import '../../../core/utils/nutrition_calculator.dart';
+import '../../../providers/settings_providers.dart';
 import '../../../providers/app_providers.dart';
+import '../../../core/localization/l10n.dart';
 
 class NutritionPlanScreen extends ConsumerWidget {
-  const NutritionPlanScreen({super.key});
+  final NutritionPlanConfig? config;
+  const NutritionPlanScreen({super.key, this.config});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final plan = ref.watch(nutritionPlanProvider);
-    final selectedDate = ref.watch(selectedDateProvider);
-    final macrosAsync = ref.watch(dailyMacrosProvider(selectedDate));
+    final l10n = ref.watch(l10nProvider);
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final calc = const NutritionCalculator();
+
+    if (profile == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.person_outline, size: 64, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(l10n.get('setupBodyFirst')),
+          ]),
+        ),
+      );
+    }
+
+    final planConfig = config;
+    if (planConfig == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
+        body: Center(child: Text('No plan active. Go to Pro to select a plan.')),
+      );
+    }
+
+    final b = calc.bmr(profile);
+    final tdee = calc.tdee(b, planConfig.activityFactor);
+    final tef = calc.tef(tdee);
+    final today = DateTime.now();
+
+    // Compute today's targets based on plan type
+    ({double cals, double protein, double carbs, double fat}) targets;
+
+    if (planConfig.planType == 'carb_cycle' && planConfig.cycleTemplate != null) {
+      final dayIdx = (today.weekday + 6) % 7; // Monday=0
+      final template = planConfig.cycleTemplate!;
+      // Cycle repeats: dayIdx % template.length
+      final templateDay = template[dayIdx % template.length];
+      targets = calc.carbCycleDay(profile, templateDay, planConfig.activityFactor, planConfig.deficit.toDouble());
+    } else if (planConfig.planType == 'carb_taper') {
+      targets = calc.carbTaper(profile, planConfig.activityFactor, planConfig.deficit.toDouble(), planConfig.currentCarbGPerKg, planConfig.fatGPerKg);
+    } else {
+      targets = calc.bulk(profile, planConfig.activityFactor, planConfig.surplus, planConfig.experienceLevel);
+    }
+
+    final cycleLabels = {'high': 'High Carb', 'medium': 'Med Carb', 'low': 'Low Carb'};
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nutrition Plan')),
-      body:
-          plan == null
-              ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 64,
-                      color: Colors.grey.shade400,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Set up your body data first'),
-                  ],
-                ),
-              )
-              : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CalorieCard(plan: plan),
-                    const SizedBox(height: 16),
-                    _MacroProgressCard(
-                      target: plan,
-                      consumed: macrosAsync,
-                    ),
-                    const SizedBox(height: 16),
-                    _MacroPieChart(target: plan),
-                  ],
-                ),
-              ),
-    );
-  }
-}
-
-class _CalorieCard extends StatelessWidget {
-  final ({double tdee, double protein, double carbs, double fat}) plan;
-  const _CalorieCard({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _StatItem(
-                  label: 'Target',
-                  value: plan.tdee.toStringAsFixed(0),
-                  unit: 'kcal',
-                ),
-                _StatItem(
-                  label: 'Protein',
-                  value: plan.protein.toStringAsFixed(0),
-                  unit: 'g',
-                ),
-                _StatItem(
-                  label: 'Carbs',
-                  value: plan.carbs.toStringAsFixed(0),
-                  unit: 'g',
-                ),
-                _StatItem(
-                  label: 'Fat',
-                  value: plan.fat.toStringAsFixed(0),
-                  unit: 'g',
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final String unit;
-  const _StatItem({
-    required this.label,
-    required this.value,
-    required this.unit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(width: 2),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                unit,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _MacroProgressCard extends StatelessWidget {
-  final ({double tdee, double protein, double carbs, double fat}) target;
-  final ({double protein, double carbs, double fat}) consumed;
-  const _MacroProgressCard({
-    required this.target,
-    required this.consumed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Today vs Target',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            _ProgressBar(
-              label: 'Protein',
-              current: consumed.protein,
-              target: target.protein,
-              color: Colors.blue,
-            ),
+      appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
+      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
+        // Summary card
+        Card(
+          child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
+            Row(children: [
+              Text(l10n.get('nutritionPlan'), style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              if (planConfig.planType == 'carb_cycle')
+                _pill(ctx: context, label: cycleLabels[planConfig.cycleTemplate![(today.weekday + 6) % 7 % planConfig.cycleTemplate!.length]] ?? ''),
+              if (planConfig.planType == 'carb_taper') _pill(ctx: context, label: 'Carb Taper'),
+              if (planConfig.planType == 'bulk') _pill(ctx: context, label: 'Bulk'),
+            ]),
             const SizedBox(height: 12),
-            _ProgressBar(
-              label: 'Carbs',
-              current: consumed.carbs,
-              target: target.carbs,
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 12),
-            _ProgressBar(
-              label: 'Fat',
-              current: consumed.fat,
-              target: target.fat,
-              color: Colors.red,
-            ),
-          ],
+            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+              _stat(l10n.get('target'), '${targets.cals.toStringAsFixed(0)}', 'kcal', Theme.of(context).colorScheme.primary),
+              _stat(l10n.get('protein'), '${targets.protein.toStringAsFixed(0)}', 'g', Colors.blue),
+              _stat(l10n.get('carbs'), '${targets.carbs.toStringAsFixed(0)}', 'g', Colors.orange),
+              _stat(l10n.get('fat'), '${targets.fat.toStringAsFixed(0)}', 'g', Colors.red),
+            ]),
+          ])),
         ),
-      ),
-    );
-  }
-}
-
-class _ProgressBar extends StatelessWidget {
-  final String label;
-  final double current;
-  final double target;
-  final Color color;
-  const _ProgressBar({
-    required this.label,
-    required this.current,
-    required this.target,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = target > 0 ? (current / target).clamp(0.0, 1.0) : 0.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            Text(
-              '${current.toStringAsFixed(0)} / ${target.toStringAsFixed(0)} g',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+        const SizedBox(height: 12),
+        // BMR/TDEE/TEF info
+        Card(
+          child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+            _infoRow('BMR', '${b.toStringAsFixed(0)} kcal'),
+            _infoRow('TDEE', '${tdee.toStringAsFixed(0)} kcal (×${planConfig.activityFactor})'),
+            _infoRow('TEF', '${tef.toStringAsFixed(0)} kcal'),
+            _infoRow('Activity', _activityLabel(planConfig.activityFactor)),
+          ])),
         ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: pct,
-            minHeight: 8,
-            backgroundColor: color.withValues(alpha: 0.15),
-            valueColor: AlwaysStoppedAnimation(color),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MacroPieChart extends StatelessWidget {
-  final ({double tdee, double protein, double carbs, double fat}) target;
-  const _MacroPieChart({required this.target});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Macro Split',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 200,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: PieChart(
-                      PieChartData(
-                        sections: [
-                          PieChartSectionData(
-                            value: target.protein * 4,
-                            color: Colors.blue,
-                            title: '${((target.protein * 4 / target.tdee) * 100).toStringAsFixed(0)}%',
-                            radius: 50,
-                            titleStyle: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          PieChartSectionData(
-                            value: target.carbs * 4,
-                            color: Colors.orange,
-                            title: '${((target.carbs * 4 / target.tdee) * 100).toStringAsFixed(0)}%',
-                            radius: 50,
-                            titleStyle: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          PieChartSectionData(
-                            value: target.fat * 9,
-                            color: Colors.red,
-                            title: '${((target.fat * 9 / target.tdee) * 100).toStringAsFixed(0)}%',
-                            radius: 50,
-                            titleStyle: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                        centerSpaceRadius: 30,
-                      ),
+        // Carb cycle week view
+        if (planConfig.planType == 'carb_cycle' && planConfig.cycleTemplate != null) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Weekly Cycle', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].asMap().entries.map((e) {
+                final t = planConfig.cycleTemplate![e.key.clamp(0, planConfig.cycleTemplate!.length - 1)];
+                final isToday = e.key == (today.weekday + 6) % 7;
+                final colors = {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey};
+                return Column(children: [
+                  Text(e.value, style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  Container(
+                    width: 32, height: 32,
+                    margin: const EdgeInsets.only(top: 4),
+                    decoration: BoxDecoration(
+                      color: (colors[t] ?? Colors.grey).withValues(alpha: isToday ? 1.0 : 0.3),
+                      borderRadius: BorderRadius.circular(16),
+                      border: isToday ? Border.all(width: 2, color: Colors.white) : null,
                     ),
+                    child: Center(child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.white : colors[t]))),
                   ),
-                  const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _LegendItem(color: Colors.blue, label: 'Protein'),
-                      SizedBox(height: 8),
-                      _LegendItem(color: Colors.orange, label: 'Carbs'),
-                      SizedBox(height: 8),
-                      _LegendItem(color: Colors.red, label: 'Fat'),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+                ]);
+              }).toList()),
+            ])),
+          ),
+        ],
+      ])),
     );
   }
-}
 
-class _LegendItem extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _LegendItem({required this.color, required this.label});
+  Widget _stat(String label, String value, String unit, Color color) => Column(children: [
+    Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: color)),
+    Text('$label ($unit)', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+  ]);
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
+  Widget _infoRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+      Text(value, style: const TextStyle(fontSize: 13)),
+    ]),
+  );
+
+  Widget _pill({required BuildContext ctx, required String label}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+    decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.3))),
+    child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(ctx).colorScheme.primary, fontWeight: FontWeight.bold)),
+  );
+
+  String _activityLabel(double f) {
+    for (final e in NutritionCalculator.activityFactors.entries) {
+      if (e.value == f) return e.key;
+    }
+    return f.toString();
   }
 }
