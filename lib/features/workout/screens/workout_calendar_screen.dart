@@ -82,6 +82,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
     final cache = ref.watch(workoutCacheProvider);
     final k = '${_focusedDay.year}-${_focusedDay.month.toString().padLeft(2, '0')}';
     final workoutDates = cache[k] ?? {};
+    final cycleTemplate = ref.watch(nutritionCycleProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final logCache = ref.watch(workoutLogCacheProvider);
     final dk = _selectedDay != null ? '${_selectedDay!.year}-${_selectedDay!.month.toString().padLeft(2, '0')}-${_selectedDay!.day.toString().padLeft(2, '0')}' : '';
@@ -119,9 +120,23 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
               todayDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
               selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
             ),
-            calendarBuilders: CalendarBuilders(markerBuilder: (c, d, _) => workoutDates.any((w) => isSameDay(w, d))
-              ? Positioned(bottom: 1, child: Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)))
-              : null),
+                calendarBuilders: CalendarBuilders(markerBuilder: (c, d, _) {
+                  final hasWorkout = workoutDates.any((w) => isSameDay(w, d));
+                  final hasCycle = cycleTemplate != null;
+                  if (!hasWorkout && !hasCycle) return null;
+                  return Positioned(bottom: 1, child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (hasWorkout) Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
+                    if (hasWorkout && hasCycle) const SizedBox(width: 2),
+                    if (hasCycle)
+                      Builder(builder: (ctx) {
+                        final idx = (d.weekday + 6) % 7;
+                        final t = cycleTemplate![idx % cycleTemplate!.length];
+                        final label = t[0].toUpperCase();
+                        final color = {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey}[t] ?? Colors.grey;
+                        return Container(width: 12, height: 12, alignment: Alignment.center, child: Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color)));
+                      }),
+                  ]));
+                }),
           ),
         ),
         GestureDetector(

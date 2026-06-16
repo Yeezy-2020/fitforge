@@ -20,6 +20,9 @@ final currentUserIdProvider = StateProvider<String>((ref) {
 
 final isOnlineProvider = StateProvider<bool>((ref) => true);
 
+// Share nutrition plan with calendar for carb cycle markers
+final nutritionCycleProvider = StateProvider<List<String>?>((ref) => null);
+
 final isProProvider = StateProvider<bool>((ref) => false);
 
 // ===== Profile =====

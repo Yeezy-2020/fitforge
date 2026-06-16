@@ -1,225 +1,246 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../../../data/models/nutrition_plan.dart';
 import '../../../data/models/user_profile.dart';
 import '../../../core/utils/nutrition_calculator.dart';
-import '../../../providers/settings_providers.dart';
 import '../../../providers/app_providers.dart';
+import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
 
-class NutritionPlanScreen extends ConsumerWidget {
-  final NutritionPlanConfig? config;
-  const NutritionPlanScreen({super.key, this.config});
+class NutritionPlanScreen extends ConsumerStatefulWidget {
+  const NutritionPlanScreen({super.key});
+  @override
+  ConsumerState<NutritionPlanScreen> createState() => _NutritionPlanState();
+}
+
+class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
+  int _step = 0; // 0=goal, 1=plan, 2=activity, 3=dashboard
+  String? _goal; // 'cut', 'maintain', 'bulk'
+  String? _planType; // 'carb_cycle', 'carb_taper'
+  String _experience = 'intermediate';
+  double _activityFactor = 1.55;
+  List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
+
+  static const _activityLabels = ['Sedentary', 'Lightly Active', 'Moderate', 'Very Active', 'Extremely Active'];
+  static const _activityValues = [1.2, 1.375, 1.55, 1.725, 1.9];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = ref.watch(l10nProvider);
     final profile = ref.watch(userProfileProvider).valueOrNull;
-    final calc = const NutritionCalculator();
-
     if (profile == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
-        body: Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.person_outline, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(l10n.get('setupBodyFirst')),
-          ]),
-        ),
-      );
+      return Scaffold(appBar: AppBar(title: Text(l10n.get('nutritionPlan'))), body: Center(child: Text(l10n.get('setupBodyFirst'))));
     }
+    if (_step < 3) return _buildOnboarding(l10n, profile);
+    return _buildDashboard(l10n, profile);
+  }
 
-    final planConfig = config;
-    if (planConfig == null) {
-      // Fallback: use legacy calculation based on profile goal
-      final legacy = calc.calculateLegacy(profile);
-      return Scaffold(
-        appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
-        body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
-          Card(
-            child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-              Row(children: [
-                Text(l10n.get('nutritionPlan'), style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                _pill(ctx: context, label: profile.goal == FitnessGoal.loseFat ? 'Cut' : profile.goal == FitnessGoal.buildMuscle ? 'Bulk' : 'Maintain'),
-              ]),
-              const SizedBox(height: 12),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                _stat(l10n.get('target'), '${legacy.tdee.toStringAsFixed(0)}', 'kcal', Theme.of(context).colorScheme.primary),
-                _stat(l10n.get('protein'), '${legacy.protein.toStringAsFixed(0)}', 'g', Colors.blue),
-                _stat(l10n.get('carbs'), '${legacy.carbs.toStringAsFixed(0)}', 'g', Colors.orange),
-                _stat(l10n.get('fat'), '${legacy.fat.toStringAsFixed(0)}', 'g', Colors.red),
-              ]),
-            ])),
-          ),
-          const SizedBox(height: 12),
-          Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
-            _infoRow('BMR', '${calc.bmr(profile).toStringAsFixed(0)} kcal'),
-            _infoRow('TDEE', '${calc.tdee(calc.bmr(profile), 1.55).toStringAsFixed(0)} kcal'),
-          ]))),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _showPlanPicker(context, ref, profile),
-            icon: const Icon(Icons.workspace_premium),
-            label: const Text('Select Plan (Pro)'),
-          ),
-        ])),
-      );
-    }
-
-    final b = calc.bmr(profile);
-    final tdee = calc.tdee(b, planConfig.activityFactor);
-    final tef = calc.tef(tdee);
-    final today = DateTime.now();
-
-    // Compute today's targets based on plan type
-    ({double cals, double protein, double carbs, double fat}) targets;
-
-    if (planConfig.planType == 'carb_cycle' && planConfig.cycleTemplate != null) {
-      final dayIdx = (today.weekday + 6) % 7; // Monday=0
-      final template = planConfig.cycleTemplate!;
-      // Cycle repeats: dayIdx % template.length
-      final templateDay = template[dayIdx % template.length];
-      targets = calc.carbCycleDay(profile, templateDay, planConfig.activityFactor, planConfig.deficit.toDouble());
-    } else if (planConfig.planType == 'carb_taper') {
-      targets = calc.carbTaper(profile, planConfig.activityFactor, planConfig.deficit.toDouble(), planConfig.currentCarbGPerKg, planConfig.fatGPerKg);
-    } else {
-      targets = calc.bulk(profile, planConfig.activityFactor, planConfig.surplus, planConfig.experienceLevel);
-    }
-
-    final cycleLabels = {'high': 'High Carb', 'medium': 'Med Carb', 'low': 'Low Carb'};
-
+  // ================================
+  // ONBOARDING
+  // ================================
+  Widget _buildOnboarding(L10n l10n, UserProfile profile) {
+    final isEn = ref.watch(localeProvider) == AppLocale.en;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
-      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
-        // Summary card
-        Card(
-          child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-            Row(children: [
-              Text(l10n.get('nutritionPlan'), style: Theme.of(context).textTheme.titleMedium),
-              const Spacer(),
-              if (planConfig.planType == 'carb_cycle')
-                _pill(ctx: context, label: cycleLabels[planConfig.cycleTemplate![(today.weekday + 6) % 7 % planConfig.cycleTemplate!.length]] ?? ''),
-              if (planConfig.planType == 'carb_taper') _pill(ctx: context, label: 'Carb Taper'),
-              if (planConfig.planType == 'bulk') _pill(ctx: context, label: 'Bulk'),
-            ]),
-            const SizedBox(height: 12),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-              _stat(l10n.get('target'), '${targets.cals.toStringAsFixed(0)}', 'kcal', Theme.of(context).colorScheme.primary),
-              _stat(l10n.get('protein'), '${targets.protein.toStringAsFixed(0)}', 'g', Colors.blue),
-              _stat(l10n.get('carbs'), '${targets.carbs.toStringAsFixed(0)}', 'g', Colors.orange),
-              _stat(l10n.get('fat'), '${targets.fat.toStringAsFixed(0)}', 'g', Colors.red),
-            ]),
-          ])),
-        ),
+      body: Padding(padding: const EdgeInsets.all(24), child: Column(children: [
+        _stepper(), const SizedBox(height: 32),
+        Expanded(child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _stepActivity(l10n, isEn)),
+        const SizedBox(height: 16),
+        Row(children: [
+          if (_step > 0) TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
+          const Spacer(),
+              FilledButton(onPressed: () {
+                setState(() => _step++);
+                if (_planType == 'carb_cycle') ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate;
+              }, child: Text(_step == 2 ? 'Get Started' : 'Next')),
+        ]),
+      ])),
+    );
+  }
+
+  Widget _stepper() {
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [0, 1, 2].map((i) => Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      width: i == _step ? 32 : 8, height: 8,
+      decoration: BoxDecoration(color: i == _step ? Theme.of(context).colorScheme.primary : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+    )).toList());
+  }
+
+  Widget _stepGoal(L10n l10n, bool isEn) {
+    return Column(children: [
+      Text('What\'s your goal?', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      Text('This determines your calorie target', style: TextStyle(color: Colors.grey)),
+      const SizedBox(height: 32),
+      _goalCard(Icons.trending_down, 'Cut', 'Lose fat while preserving muscle.\n500 kcal daily deficit.', _goal == 'cut', () => setState(() => _goal = 'cut')),
+      const SizedBox(height: 12),
+      _goalCard(Icons.trending_flat, 'Maintain', 'Keep your current body composition.\nEat at maintenance calories.', _goal == 'maintain', () => setState(() => _goal = 'maintain')),
+      const SizedBox(height: 12),
+      _goalCard(Icons.trending_up, 'Bulk', 'Build muscle with controlled surplus.\n+200-500 kcal daily surplus.', _goal == 'bulk', () => setState(() => _goal = 'bulk')),
+    ]);
+  }
+
+  Widget _goalCard(IconData icon, String title, String desc, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(border: Border.all(width: selected ? 2 : 1, color: selected ? Theme.of(context).colorScheme.primary : Colors.grey.shade300), borderRadius: BorderRadius.circular(16), color: selected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.05) : null),
+        child: Row(children: [Icon(icon, size: 32, color: selected ? Theme.of(context).colorScheme.primary : Colors.grey), const SizedBox(width: 16), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 4), Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))]))]),
+      ),
+    );
+  }
+
+  Widget _stepPlan(L10n l10n, bool isEn) {
+    if (_goal == 'maintain') { setState(() { _planType = 'carb_cycle'; _step++; }); return const SizedBox.shrink(); }
+    return Column(children: [
+      Text('Choose your method', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      Text(_goal == 'cut' ? 'Two evidence-based approaches for fat loss' : 'Select your training experience', style: TextStyle(color: Colors.grey)),
+      const SizedBox(height: 32),
+      if (_goal == 'cut') ...[
+        _goalCard(Icons.loop, 'Carb Cycling', 'Rotate high/medium/low carb days\nbased on training intensity.\nMetabolically adaptive.', _planType == 'carb_cycle', () => setState(() => _planType = 'carb_cycle')),
         const SizedBox(height: 12),
-        // BMR/TDEE/TEF info
-        Card(
-          child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
-            _infoRow('BMR', '${b.toStringAsFixed(0)} kcal'),
-            _infoRow('TDEE', '${tdee.toStringAsFixed(0)} kcal (×${planConfig.activityFactor})'),
-            _infoRow('TEF', '${tef.toStringAsFixed(0)} kcal'),
-            _infoRow('Activity', _activityLabel(planConfig.activityFactor)),
-          ])),
-        ),
-        // Carb cycle week view
-        if (planConfig.planType == 'carb_cycle' && planConfig.cycleTemplate != null) ...[
+        _goalCard(Icons.arrow_downward, 'Carb Taper', 'Gradually reduce carbs each phase.\nSimple and predictable.\nRefeed every 2-4 weeks.', _planType == 'carb_taper', () => setState(() => _planType = 'carb_taper')),
+      ] else ...[
+        _goalCard(Icons.person, 'Beginner (< 1yr)', '+500 kcal, high carb ratio.\nMaximize newbie gains.', _experience == 'beginner', () => setState(() => _experience = 'beginner')),
+        const SizedBox(height: 12),
+        _goalCard(Icons.person_outline, 'Intermediate (1-3yr)', '+300-400 kcal.\nBalanced macro split.', _experience == 'intermediate', () => setState(() => _experience = 'intermediate')),
+        const SizedBox(height: 12),
+        _goalCard(Icons.school, 'Advanced (3+yr)', '+200-300 kcal.\nHigher protein, leaner gains.', _experience == 'advanced', () => setState(() => _experience = 'advanced')),
+      ],
+    ]);
+  }
+
+  Widget _stepActivity(L10n l10n, bool isEn) {
+    final idx = _activityValues.indexOf(_activityFactor);
+    return Column(children: [
+      Text('Activity Level', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      Text('How active is your daily life\n(outside of workouts)?', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+      const SizedBox(height: 32),
+      Text(_activityLabels[idx.clamp(0, 4)], style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 24),
+      Slider(value: idx.toDouble().clamp(0, 4), max: 4, divisions: 4, label: _activityLabels[idx.clamp(0, 4)], onChanged: (v) => setState(() => _activityFactor = _activityValues[v.round()])),
+    ]);
+  }
+
+  // ================================
+  // DASHBOARD
+  // ================================
+  Widget _buildDashboard(L10n l10n, UserProfile profile) {
+    final calc = const NutritionCalculator();
+    final b = calc.bmr(profile);
+    final tdee = calc.tdee(b, _activityFactor);
+    final tef = calc.tef(tdee);
+    final today = DateTime.now();
+    final deficit = (_goal == 'cut') ? 500 : 0;
+    final surplus = (_goal == 'bulk') ? (_experience == 'beginner' ? 500 : _experience == 'intermediate' ? 350 : 250) : 0;
+
+    // Compute targets
+    ({double cals, double protein, double carbs, double fat}) targets;
+    String planLabel = '';
+    if (_planType == 'carb_cycle') {
+      final dayIdx = (today.weekday + 6) % 7;
+      final templateDay = _cycleTemplate[dayIdx % _cycleTemplate.length];
+      targets = calc.carbCycleDay(profile, templateDay, _activityFactor, deficit.toDouble());
+      planLabel = {'high': 'High Carb', 'medium': 'Med Carb', 'low': 'Low Carb'}[templateDay] ?? '';
+    } else if (_planType == 'carb_taper') {
+      targets = calc.carbTaper(profile, _activityFactor, deficit.toDouble(), 3.0, 1.0);
+      planLabel = 'Carb Taper';
+    } else {
+      targets = calc.bulk(profile, _activityFactor, surplus, _experience);
+      planLabel = 'Bulk';
+    }
+
+    // Actual intake from diet cache
+    final dietCache = ref.watch(dietCacheProvider);
+    final dk = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final dietLogs = dietCache[dk] ?? [];
+    final foods = ref.watch(foodListProvider).valueOrNull ?? [];
+    double actualKcal = 0, actualP = 0, actualC = 0, actualF = 0;
+    for (final log in dietLogs) {
+      actualKcal += log.calories;
+      final food = foods.where((f) => f.id == log.foodId).firstOrNull;
+      if (food != null) { final f = log.grams / 100; actualP += food.proteinPer100g * f; actualC += food.carbsPer100g * f; actualF += food.fatPer100g * f; }
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.get('nutritionPlan')), actions: [
+        _pill(label: planLabel),
+        IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() { _step = 0; _goal = null; _planType = null; })),
+      ]),
+      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
+        // Target macros
+        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
+          Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          Card(
-            child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Weekly Cycle', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].asMap().entries.map((e) {
-                final t = planConfig.cycleTemplate![e.key.clamp(0, planConfig.cycleTemplate!.length - 1)];
-                final isToday = e.key == (today.weekday + 6) % 7;
-                final colors = {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey};
-                return Column(children: [
-                  Text(e.value, style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  Container(
-                    width: 32, height: 32,
-                    margin: const EdgeInsets.only(top: 4),
-                    decoration: BoxDecoration(
-                      color: (colors[t] ?? Colors.grey).withValues(alpha: isToday ? 1.0 : 0.3),
-                      borderRadius: BorderRadius.circular(16),
-                      border: isToday ? Border.all(width: 2, color: Colors.white) : null,
-                    ),
-                    child: Center(child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.white : colors[t]))),
-                  ),
-                ]);
-              }).toList()),
-            ])),
-          ),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            _stat(targets.cals.toStringAsFixed(0), 'kcal', Theme.of(context).colorScheme.primary),
+            _stat('${targets.protein.toStringAsFixed(0)}g', 'Protein', Colors.blue),
+            _stat('${targets.carbs.toStringAsFixed(0)}g', 'Carbs', Colors.orange),
+            _stat('${targets.fat.toStringAsFixed(0)}g', 'Fat', Colors.red),
+          ]),
+        ]))),
+        const SizedBox(height: 12),
+        // Progress bars
+        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
+          Text('Today\'s Intake', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          _progress('kcal', actualKcal, targets.cals, Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 8),
+          _progress('Protein', actualP, targets.protein, Colors.blue),
+          const SizedBox(height: 8),
+          _progress('Carbs', actualC, targets.carbs, Colors.orange),
+          const SizedBox(height: 8),
+          _progress('Fat', actualF, targets.fat, Colors.red),
+        ]))),
+        const SizedBox(height: 12),
+        // TDEE info
+        Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+          _infoRow('BMR', '${b.toStringAsFixed(0)} kcal'), _infoRow('TDEE', '${tdee.toStringAsFixed(0)} kcal'), _infoRow('TEF', '${tef.toStringAsFixed(0)} kcal'),
+        ]))),
+        // Carb cycle week
+        if (_planType == 'carb_cycle') ...[
+          const SizedBox(height: 12),
+          Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Weekly Cycle', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].asMap().entries.map((e) {
+              final t = _cycleTemplate[e.key];
+              final isToday = e.key == (today.weekday + 6) % 7;
+              final colors = {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey};
+              return Column(children: [
+                Text(e.value, style: TextStyle(fontSize: 11, color: Colors.grey)),
+                Container(width: 32, height: 32, margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(color: (colors[t] ?? Colors.grey).withValues(alpha: isToday ? 1 : 0.3), borderRadius: BorderRadius.circular(16), border: isToday ? Border.all(width: 2, color: Colors.white) : null),
+                  child: Center(child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isToday ? Colors.white : colors[t])))),
+              ]);
+            }).toList()),
+          ]))),
         ],
       ])),
     );
   }
 
-  Widget _stat(String label, String value, String unit, Color color) => Column(children: [
-    Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: color)),
-    Text('$label ($unit)', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+  Widget _stat(String value, String label, Color color) => Column(children: [
+    Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: color)),
+    Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
   ]);
 
-  Widget _infoRow(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-      Text(value, style: const TextStyle(fontSize: 13)),
-    ]),
-  );
-
-  Widget _pill({required BuildContext ctx, required String label}) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-    decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.3))),
-    child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(ctx).colorScheme.primary, fontWeight: FontWeight.bold)),
-  );
-
-  String _activityLabel(double f) {
-    for (final e in NutritionCalculator.activityFactors.entries) {
-      if (e.value == f) return e.key;
-    }
-    return f.toString();
+  Widget _progress(String label, double actual, double target, Color color) {
+    final pct = target > 0 ? ((actual / target).clamp(0.0, 1.0) as double) : 0.0;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: const TextStyle(fontSize: 12)), Text('${actual.toStringAsFixed(0)} / ${target.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
+      ]),
+      const SizedBox(height: 4),
+      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: pct, minHeight: 8, backgroundColor: color.withValues(alpha: 0.1), valueColor: AlwaysStoppedAnimation(color))),
+    ]);
   }
 
-  static void _showPlanPicker(BuildContext context, WidgetRef ref, UserProfile profile) {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Select Your Plan', style: Theme.of(ctx).textTheme.titleLarge),
-          const SizedBox(height: 16),
-          _planCard(ctx, 'Carb Cycling', 'High/Medium/Low carb days based on training intensity', 'carb_cycle'),
-          const SizedBox(height: 8),
-          _planCard(ctx, 'Carb Taper', 'Gradual carb reduction with refeed days', 'carb_taper'),
-          const SizedBox(height: 8),
-          _planCard(ctx, 'Bulk', 'Controlled calorie surplus for muscle gain', 'bulk'),
-        ]),
-      ),
-    );
-  }
+  Widget _infoRow(String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)), Text(value, style: const TextStyle(fontSize: 13))]));
 
-  static Widget _planCard(BuildContext ctx, String title, String desc, String planType) {
-    return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      tileColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.pop(ctx);
-        final config = NutritionPlanConfig(
-          planType: planType,
-          deficit: planType != 'bulk' ? 500 : 0,
-          surplus: planType == 'bulk' ? 500 : 0,
-          cycleTemplate: planType == 'carb_cycle' ? ['low','low','medium','low','medium','medium','high'] : null,
-        );
-        Navigator.of(ctx).push(MaterialPageRoute(
-          builder: (_) => ProviderScope(child: NutritionPlanScreen(config: config)),
-        ));
-      },
-    );
-  }
+  Widget _pill({required String label}) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))), child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)));
 }
