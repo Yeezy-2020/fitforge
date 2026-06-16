@@ -222,10 +222,17 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.get('nutritionPlan')), actions: [
+      appBar: AppBar(
+        title: const SizedBox.shrink(),
+        toolbarHeight: 4,
+        actions: [
         _pill(label: planLabel),
       ]),
-      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
+      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _pill(label: planLabel),
+        ),
         // Target macros
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
           Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium),
