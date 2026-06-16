@@ -15,9 +15,9 @@ class NutritionPlanScreen extends ConsumerStatefulWidget {
 }
 
 class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
-  int _step = 0; // 0=goal, 1=plan, 2=activity, 3=dashboard
-  String? _goal; // 'cut', 'maintain', 'bulk'
-  String? _planType; // 'carb_cycle', 'carb_taper'
+  int _step = 0;
+  String? _goal;
+  String? _planType;
   String _experience = 'intermediate';
   double _activityFactor = 1.55;
   List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
@@ -25,6 +25,37 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   static const _activityLabels = ['Sedentary', 'Lightly Active', 'Moderate', 'Very Active', 'Extremely Active'];
   static const _activityFrequency = ['0-1 ×/week', '1-2 ×/week', '3-4 ×/week', '5-6 ×/week', '6-7 ×/week'];
   static const _activityValues = [1.2, 1.375, 1.55, 1.725, 1.9];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedPlan();
+  }
+
+  Future<void> _loadSavedPlan() async {
+    final userId = ref.read(currentUserIdProvider);
+    final saved = await AppDatabase.instance.getNutritionPlan(userId);
+    if (saved != null && mounted) {
+      setState(() {
+        _step = 3; // Skip to dashboard
+        _goal = saved['goal'] as String?;
+        _planType = saved['planType'] as String? ?? 'carb_cycle';
+        _experience = saved['experience'] as String? ?? 'intermediate';
+        _activityFactor = (saved['activityFactor'] as num?)?.toDouble() ?? 1.55;
+        _cycleTemplate = (saved['cycleTemplate'] as List?)?.cast<String>() ?? ['low','low','medium','low','medium','medium','high'];
+        if (_planType == 'carb_cycle') ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate;
+      });
+    }
+  }
+
+  Future<void> _savePlan() async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.saveNutritionPlan(userId, {
+      'goal': _goal, 'planType': _planType, 'experience': _experience,
+      'activityFactor': _activityFactor, 'cycleTemplate': _cycleTemplate,
+    });
+    if (_planType == 'carb_cycle') ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,9 +83,9 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
           if (_step > 0) TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
           const Spacer(),
               FilledButton(onPressed: () {
-                setState(() => _step++);
-                if (_planType == 'carb_cycle') ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate;
-              }, child: Text(_step == 2 ? 'Get Started' : 'Next')),
+                _savePlan();
+                setState(() => _step = 3);
+              }, child: Text('Get Started')),
         ]),
       ])),
     );

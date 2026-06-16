@@ -289,6 +289,17 @@ class AppDatabase {
     return null;
   }
 
+  // ---- Nutrition Plan ----
+  Future<Map<String, dynamic>?> getNutritionPlan(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'nutrition_plan'));
+    if (data == null) return null;
+    return jsonDecode(data) as Map<String, dynamic>;
+  }
+
+  Future<void> saveNutritionPlan(String userId, Map<String, dynamic> plan) async {
+    await _storage.write(key: _key(userId, 'nutrition_plan'), value: jsonEncode(plan));
+  }
+
   String _dateStr(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
