@@ -225,9 +225,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
       appBar: AppBar(
         title: const SizedBox.shrink(),
         toolbarHeight: 4,
-        actions: [
-        _pill(label: planLabel),
-      ]),
+      ),
       body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -318,7 +316,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
 
   Widget _infoRow(String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)), Text(value, style: const TextStyle(fontSize: 13))]));
 
-  Widget _pill({required String label}) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))), child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)));
+  Widget _pill({required String label}) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))), child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)));
 
   void _showEditActivity(L10n l10n) {
     final idx = _activityValues.indexOf(_activityFactor);
