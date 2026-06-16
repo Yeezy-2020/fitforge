@@ -84,20 +84,21 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
           if (_step > 0) TextButton(onPressed: () => setState(() => _step--), child: const Text('Back')),
           const Spacer(),
               FilledButton(onPressed: () {
-                _savePlan();
-                setState(() => _step = 3);
-              }, child: Text('Get Started')),
+                if (_step == 2) { _savePlan(); setState(() => _step = 3); } else { setState(() => _step++); }
+              }, child: Text(_step == 2 ? 'Get Started' : 'Next')),
         ]),
       ])),
     );
   }
 
   Widget _stepper() {
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [0, 1, 2].map((i) => Container(
+    final steps = _goal == 'maintain' ? 2 : 3;
+    final current = _goal == 'maintain' && _step >= 2 ? _step - 1 : _step;
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(steps, (i) => Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      width: i == _step ? 32 : 8, height: 8,
-      decoration: BoxDecoration(color: i == _step ? Theme.of(context).colorScheme.primary : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
-    )).toList());
+      width: i == current ? 32 : 8, height: 8,
+      decoration: BoxDecoration(color: i == current ? Theme.of(context).colorScheme.primary : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+    )));
   }
 
   Widget _stepGoal(L10n l10n, bool isEn) {
@@ -126,7 +127,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   }
 
   Widget _stepPlan(L10n l10n, bool isEn) {
-    if (_goal == 'maintain') { setState(() { _planType = 'carb_cycle'; _step++; }); return const SizedBox.shrink(); }
+    if (_goal == 'maintain') return _stepActivity(l10n, isEn);
     return Column(children: [
       Text('Choose your method', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
@@ -326,7 +327,13 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         content: const Text('This will restart the plan selection process. Your current settings will be replaced.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () { Navigator.pop(ctx); setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; }); }, child: const Text('Reset')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () async {
+            Navigator.pop(ctx);
+            final userId = ref.read(currentUserIdProvider);
+            await AppDatabase.instance.saveNutritionPlan(userId, {}); // clear saved
+            ref.read(nutritionCycleProvider.notifier).state = null;
+            setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; });
+          }, child: const Text('Reset')),
         ],
       ),
     );
