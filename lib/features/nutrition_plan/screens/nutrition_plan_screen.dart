@@ -204,7 +204,6 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.get('nutritionPlan')), actions: [
         _pill(label: planLabel),
-        IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() { _step = 0; _goal = null; _planType = null; })),
       ]),
       body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
         // Target macros
@@ -255,6 +254,21 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
             }).toList()),
           ]))),
         ],
+        const SizedBox(height: 16),
+        // Action buttons
+        OutlinedButton.icon(
+          onPressed: () => _showEditActivity(l10n),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('Edit Activity'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _confirmReset(l10n),
+          icon: const Icon(Icons.refresh, size: 18, color: Colors.red),
+          label: const Text('Reset Plan'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44), foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+        ),
       ])),
     );
   }
@@ -278,4 +292,43 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   Widget _infoRow(String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)), Text(value, style: const TextStyle(fontSize: 13))]));
 
   Widget _pill({required String label}) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), margin: const EdgeInsets.only(right: 8), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))), child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)));
+
+  void _showEditActivity(L10n l10n) {
+    final idx = _activityValues.indexOf(_activityFactor);
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final i = _activityValues.indexOf(_activityFactor);
+          return AlertDialog(
+            title: const Text('Edit Activity Level'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(_activityLabels[i.clamp(0, 4)], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text('Train ${_activityFrequency[i.clamp(0, 4)]}', style: TextStyle(color: Colors.grey.shade600)),
+              const SizedBox(height: 16),
+              Slider(value: i.toDouble().clamp(0, 4), max: 4, divisions: 4, onChanged: (v) => setDialogState(() => _activityFactor = _activityValues[v.round()])),
+            ]),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(onPressed: () { _savePlan(); setState(() {}); Navigator.pop(ctx); }, child: const Text('Save')),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmReset(L10n l10n) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Plan'),
+        content: const Text('This will restart the plan selection process. Your current settings will be replaced.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () { Navigator.pop(ctx); setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; }); }, child: const Text('Reset')),
+        ],
+      ),
+    );
+  }
 }
