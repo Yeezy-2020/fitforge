@@ -23,6 +23,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
 
   static const _activityLabels = ['Sedentary', 'Lightly Active', 'Moderate', 'Very Active', 'Extremely Active'];
+  static const _activityFrequency = ['0-1 ×/week', '1-2 ×/week', '3-4 ×/week', '5-6 ×/week', '6-7 ×/week'];
   static const _activityValues = [1.2, 1.375, 1.55, 1.725, 1.9];
 
   @override
@@ -121,6 +122,8 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
       Text('How active is your daily life\n(outside of workouts)?', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
       const SizedBox(height: 32),
       Text(_activityLabels[idx.clamp(0, 4)], style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 4),
+      Text('Train ${_activityFrequency[idx.clamp(0, 4)]}', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
       const SizedBox(height: 24),
       Slider(value: idx.toDouble().clamp(0, 4), max: 4, divisions: 4, label: _activityLabels[idx.clamp(0, 4)], onChanged: (v) => setState(() => _activityFactor = _activityValues[v.round()])),
     ]);
