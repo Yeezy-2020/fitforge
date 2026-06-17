@@ -386,9 +386,6 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
     );
   }
 
-    );
-  }
-
   void _showCycleEditor() {
     final labels = {'low': 'Low Carb', 'medium': 'Med Carb', 'high': 'High Carb'};
     final colors = {'low': Colors.grey, 'medium': Colors.blue, 'high': Colors.orange};
