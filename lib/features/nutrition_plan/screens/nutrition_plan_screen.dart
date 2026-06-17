@@ -446,15 +446,23 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: 6, children: template.asMap().entries.map((e) {
                   final t = e.value;
-                  return InputChip(
-                    label: Text('Day ${e.key + 1}: ${labels[t]}', style: const TextStyle(fontSize: 11)),
-                    selected: true,
-                    deleteIcon: template.length > 2 ? const Icon(Icons.close, size: 14) : null,
-                    onDeleted: template.length > 2 ? () => setSheetState(() => template.removeAt(e.key)) : null,
-                    onSelected: (_) {
+                  return GestureDetector(
+                    onTap: () {
                       final next = {'low': 'medium', 'medium': 'high', 'high': 'low'}[t] ?? 'low';
                       setSheetState(() => template[e.key] = next);
                     },
+                    child: Container(
+                      padding: const EdgeInsets.only(left: 10, right: 6, top: 4, bottom: 4),
+                      decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(20)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('Day ${e.key + 1}: ${labels[t]}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        if (template.length > 2)
+                          GestureDetector(
+                            onTap: () => setSheetState(() => template.removeAt(e.key)),
+                            child: const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.close, size: 14)),
+                          ),
+                      ]),
+                    ),
                   );
                 }).toList()),
                 if (template.length < 30) ...[
