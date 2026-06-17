@@ -128,7 +128,10 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                   final hasDiet = (dietCache[dateKey] ?? []).isNotEmpty;
                   final hasCycle = cycleTemplate != null;
                   if (!hasWorkout && !hasDiet && !hasCycle) return null;
-                  return Positioned(bottom: 1, child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  return Positioned(bottom: 1, child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2)]),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
                     if (hasWorkout) Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
                     if (hasWorkout && (hasDiet || hasCycle)) const SizedBox(width: 2),
                     if (hasDiet) Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
@@ -141,7 +144,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                         final t = cycleTemplate[idx];
                         return Container(alignment: Alignment.center, child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey}[t] ?? Colors.grey)));
                       }),
-                  ]));
+                  ])));
                 }),
           ),
         ),
