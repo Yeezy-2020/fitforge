@@ -8,6 +8,7 @@ import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
 import '../../../data/repositories/app_database.dart';
+import 'package:go_router/go_router.dart';
 
 class NutritionPlanScreen extends ConsumerStatefulWidget {
   const NutritionPlanScreen({super.key});
@@ -248,6 +249,21 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
           Text('Today\'s Intake', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
+          if (dietLogs.isEmpty) ...[
+            Icon(Icons.restaurant_outlined, size: 32, color: Colors.grey.shade400),
+            const SizedBox(height: 8),
+            Text('No meals logged today', style: TextStyle(color: Colors.grey.shade500)),
+            const SizedBox(height: 4),
+            TextButton(onPressed: () => context.push('/home'), child: const Text('Go to Diet tab →', style: TextStyle(fontSize: 12))),
+          ] else ...[
+            _progress('kcal', actualKcal, targets.cals, Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 8),
+            _progress('Protein', actualP, targets.protein, Colors.blue),
+            const SizedBox(height: 8),
+            _progress('Carbs', actualC, targets.carbs, Colors.orange),
+            const SizedBox(height: 8),
+            _progress('Fat', actualF, targets.fat, Colors.red),
+          ],
           _progress('kcal', actualKcal, targets.cals, Theme.of(context).colorScheme.primary),
           const SizedBox(height: 8),
           _progress('Protein', actualP, targets.protein, Colors.blue),
@@ -261,11 +277,26 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(children: [
           _infoRow('BMR', '${b.toStringAsFixed(0)} kcal'), _infoRow('TDEE', '${tdee.toStringAsFixed(0)} kcal'), _infoRow('TEF', '${tef.toStringAsFixed(0)} kcal'),
         ]))),
+        // Refeed countdown for Carb Taper
+        if (_planType == 'carb_taper') ...[
+          const SizedBox(height: 12),
+          Card(child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+            const Icon(Icons.loop, size: 18, color: Colors.orange),
+            const SizedBox(width: 8),
+            Text('Next Refeed: ${_daysUntilRefeed()} days', style: const TextStyle(fontSize: 13)),
+            const Spacer(),
+            Text('Every 14 days', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          ]))),
+        ],
         // Carb cycle week
         if (_planType == 'carb_cycle') ...[
           const SizedBox(height: 12),
           Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Weekly Cycle', style: Theme.of(context).textTheme.titleSmall),
+            Row(children: [
+              Text('Weekly Cycle', style: Theme.of(context).textTheme.titleSmall),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.edit, size: 16), onPressed: _showCycleEditor, tooltip: 'Edit template'),
+            ]),
             const SizedBox(height: 8),
             Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].asMap().entries.map((e) {
               final t = _cycleTemplate[e.key];
@@ -327,12 +358,23 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         builder: (ctx, setDialogState) {
           final i = _activityValues.indexOf(_activityFactor);
           return AlertDialog(
-            title: const Text('Edit Activity Level'),
-            content: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(_activityLabels[i.clamp(0, 4)], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            title: const Text('Edit Settings'),
+            content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Activity Level', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(_activityLabels[i.clamp(0, 4)], style: const TextStyle(fontSize: 16)),
               Text('Train ${_activityFrequency[i.clamp(0, 4)]}', style: TextStyle(color: Colors.grey.shade600)),
-              const SizedBox(height: 16),
               Slider(value: i.toDouble().clamp(0, 4), max: 4, divisions: 4, onChanged: (v) => setDialogState(() => _activityFactor = _activityValues[v.round()])),
+              if (_goal == 'bulk') ...[
+                const SizedBox(height: 16),
+                Text('Training Experience', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(segments: const [
+                  ButtonSegment(value: 'beginner', label: Text('Beginner')),
+                  ButtonSegment(value: 'intermediate', label: Text('Intermed.')),
+                  ButtonSegment(value: 'advanced', label: Text('Advanced')),
+                ], selected: {_experience}, onSelectionChanged: (v) => setDialogState(() => _experience = v.first)),
+              ],
             ]),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -342,6 +384,46 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         },
       ),
     );
+  }
+
+    );
+  }
+
+  void _showCycleEditor() {
+    final labels = {'low': 'Low Carb', 'medium': 'Med Carb', 'high': 'High Carb'};
+    final colors = {'low': Colors.grey, 'medium': Colors.blue, 'high': Colors.orange};
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Edit Weekly Cycle'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: List.generate(7, (i) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(children: [
+              SizedBox(width: 32, child: Text(days[i], style: const TextStyle(fontWeight: FontWeight.bold))),
+              const SizedBox(width: 8),
+              ...['low', 'medium', 'high'].map((t) => Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: ChoiceChip(
+                  label: Text(labels[t]!, style: const TextStyle(fontSize: 11)),
+                  selected: _cycleTemplate[i] == t,
+                  selectedColor: colors[t]!.withValues(alpha: 0.3),
+                  onSelected: (_) => setDialogState(() => _cycleTemplate[i] = t),
+                ),
+              )),
+            ]),
+          ))),
+        ),
+      ),
+    );
+  }
+
+  int _daysUntilRefeed() {
+    // Simple calculation: next refeed in 14 days from plan start
+    // For now, return a placeholder based on today's day of year % 14
+    final dayOfYear = DateTime.now().difference(DateTime(DateTime.now().year)).inDays;
+    return 14 - (dayOfYear % 14);
   }
 
   void _confirmReset(L10n l10n) {
