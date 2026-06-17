@@ -3,11 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../providers/app_providers.dart';
 
-class PaywallScreen extends ConsumerWidget {
+class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
+}
+
+class _PaywallScreenState extends ConsumerState<PaywallScreen> {
+  int _selectedPlan = 1; // 0 = monthly, 1 = annual (default)
+
+  void _handleSubscribe() {
+    ref.read(isProProvider.notifier).state = true;
+    context.pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('订阅成功！(演示模式)')),
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.pop())),
       body: SafeArea(
@@ -35,6 +48,8 @@ class PaywallScreen extends ConsumerWidget {
                 title: 'Monthly',
                 price: '\$9.99/mo',
                 isRecommended: false,
+                isSelected: _selectedPlan == 0,
+                onTap: () => setState(() => _selectedPlan = 0),
               ),
               const SizedBox(height: 12),
               _SubscriptionCard(
@@ -42,21 +57,17 @@ class PaywallScreen extends ConsumerWidget {
                 price: '\$59.99/yr',
                 subtitle: 'Equivalent to \$4.99/mo',
                 isRecommended: true,
+                isSelected: _selectedPlan == 1,
+                onTap: () => setState(() => _selectedPlan = 1),
               ),
               const SizedBox(height: 24),
               const _FeatureList(),
               const Spacer(),
               FilledButton(
-                onPressed: () {
-                  ref.read(isProProvider.notifier).state = true;
-                  context.pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('订阅成功！(演示模式)')),
-                  );
-                },
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Subscribe', style: TextStyle(fontSize: 16)),
+                onPressed: _handleSubscribe,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(_selectedPlan == 0 ? 'Subscribe Monthly' : 'Subscribe Annually', style: const TextStyle(fontSize: 16)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -78,68 +89,55 @@ class _SubscriptionCard extends StatelessWidget {
   final String price;
   final String? subtitle;
   final bool isRecommended;
+  final bool isSelected;
+  final VoidCallback onTap;
   const _SubscriptionCard({
     required this.title,
     required this.price,
     this.subtitle,
     required this.isRecommended,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color:
-          isRecommended
-              ? Theme.of(context).colorScheme.primaryContainer
-              : null,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side:
-            isRecommended
-                ? BorderSide(color: Theme.of(context).colorScheme.primary)
-                : BorderSide.none,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            if (isRecommended)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(8),
+    final theme = Theme.of(context);
+    final c = theme.colorScheme;
+    final borderColor = isSelected ? c.primary : (isRecommended ? c.primary : Colors.transparent);
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        color: isSelected ? c.primaryContainer : (isRecommended ? c.primaryContainer : null),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: borderColor, width: isSelected ? 2 : (isRecommended ? 1 : 0)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              if (isRecommended)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(8)),
+                  child: const Text('Best Value', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ),
-                child: const Text(
-                  'Best Value',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleMedium),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: theme.textTheme.titleMedium),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey,
-                      ),
-                    ),
+                    Text(subtitle!, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
                   ],
-                ],
+                ]),
               ),
-            ),
-            Text(
-              price,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
+              Text(price, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? c.primary : Colors.grey),
+            ],
+          ),
         ),
       ),
     );
