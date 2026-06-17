@@ -15,7 +15,7 @@ class NutritionPlanScreen extends ConsumerStatefulWidget {
   ConsumerState<NutritionPlanScreen> createState() => _NutritionPlanState();
 }
 
-class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
+class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with SingleTickerProviderStateMixin {
   int _step = 0;
   String? _goal;
   String? _planType;
@@ -24,6 +24,10 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
   DateTime? _planStartDate;
   int? _lastStep;
+  bool _didTriggerAnim = false;
+
+  late final AnimationController _animCtrl;
+  late final Animation<double> _curvedAnim;
 
   static const _presetTemplates = {
     'Classic 7-Day': ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'],
@@ -40,7 +44,15 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _curvedAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _loadSavedPlan();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSavedPlan() async {
@@ -79,7 +91,17 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
     if (profile == null) {
       return Scaffold(appBar: AppBar(title: Text(l10n.get('nutritionPlan'))), body: Center(child: Text(l10n.get('setupBodyFirst'))));
     }
-    if (_step < 3) return _buildOnboarding(l10n, profile);
+    if (_step < 3) {
+      _didTriggerAnim = false;
+      return _buildOnboarding(l10n, profile);
+    }
+    if (!_didTriggerAnim) {
+      _didTriggerAnim = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _animCtrl.reset();
+        _animCtrl.forward();
+      });
+    }
     return _buildDashboard(l10n, profile);
   }
 
@@ -357,13 +379,23 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
 
   Widget _progress(String label, double actual, double target, Color color) {
     final pct = target > 0 ? ((actual / target).clamp(0.0, 1.0)) : 0.0;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(fontSize: 12)), Text('${actual.toStringAsFixed(0)} / ${target.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
-      ]),
-      const SizedBox(height: 4),
-      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: pct, minHeight: 8, backgroundColor: color.withValues(alpha: 0.1), valueColor: AlwaysStoppedAnimation(color))),
-    ]);
+    return AnimatedBuilder(
+      animation: _curvedAnim,
+      builder: (context, child) {
+        final v = _curvedAnim.value;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(label, style: const TextStyle(fontSize: 12)),
+            Text('${(actual * v).toStringAsFixed(0)} / ${target.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
+          ]),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(value: pct * v, minHeight: 8, backgroundColor: color.withValues(alpha: 0.1), valueColor: AlwaysStoppedAnimation(color)),
+          ),
+        ]);
+      },
+    );
   }
 
   Widget _infoRow(String label, String value) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)), Text(value, style: const TextStyle(fontSize: 13))]));
