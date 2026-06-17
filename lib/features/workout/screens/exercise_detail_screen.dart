@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/exercise.dart';
-import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
 

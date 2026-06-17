@@ -12,14 +12,6 @@ class SupabaseService {
 
   String? get userId => _client.auth.currentUser?.id;
 
-  Map<String, dynamic> _foodToRow(Food f) => {
-    'name': f.name,
-    'calories_per_100g': f.caloriesPer100g,
-    'protein_per_100g': f.proteinPer100g,
-    'carbs_per_100g': f.carbsPer100g,
-    'fat_per_100g': f.fatPer100g,
-    'user_id': userId,
-  };
 
   Food _foodFromRow(Map<String, dynamic> r) => Food(
     id: r['id'] as String,

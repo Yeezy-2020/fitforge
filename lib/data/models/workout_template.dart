@@ -1,4 +1,3 @@
-import 'exercise.dart';
 
 class WorkoutTemplate {
   final String id;

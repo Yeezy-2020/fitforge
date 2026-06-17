@@ -1,10 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fitforge/features/workout/screens/workout_calendar_screen.dart';
-import 'package:fitforge/providers/app_providers.dart';
-import 'package:fitforge/providers/settings_providers.dart';
-import 'package:fitforge/core/localization/l10n.dart';
 
 void main() {
   testWidgets('E2E: pill buttons render with correct dimensions', (tester) async {

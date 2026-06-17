@@ -34,7 +34,7 @@ class DietDatesNotifier extends StateNotifier<Set<String>> {
   void loadMonth(int year, int month) async {
     try {
       final firstDay = DateTime(year, month, 1);
-      final lastDay = DateTime(year, month + 1, 0);
+      
       final logs = await _supabase.getDietLogs(firstDay);
       for (final log in logs) { state = {...state, _k(log.date)}; }
     } catch (_) {}

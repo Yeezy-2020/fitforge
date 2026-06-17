@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/body_measurement.dart';
-import '../../../data/models/user_profile.dart';
+import '../../../data/repositories/app_database.dart';
 import '../../../providers/app_providers.dart';
-import '../../../providers/settings_providers.dart';
 
 class BodyScreen extends ConsumerStatefulWidget {
   const BodyScreen({super.key});
@@ -29,12 +28,10 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
 
   void _loadEntries() {
     final userId = ref.read(currentUserIdProvider);
-    setState(() {
-      _entries = _entries;
-    });
+    AppDatabase.instance.getBodyMeasurements(userId).then((v) => setState(() => _entries = v));
   }
 
-  void _addEntry() {
+  void _addEntry() async {
     final w = double.tryParse(_weightCtrl.text);
     if (w == null) return;
     final entry = BodyMeasurement(
@@ -42,27 +39,31 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
       weight: w, chest: double.tryParse(_chestCtrl.text), waist: double.tryParse(_waistCtrl.text),
       leftArm: double.tryParse(_armCtrl.text),
     );
-    setState(() { _entries.insert(0, entry); _weightCtrl.clear(); _chestCtrl.clear(); _waistCtrl.clear(); _armCtrl.clear(); });
+    await AppDatabase.instance.saveBodyMeasurement(ref.read(currentUserIdProvider), entry);
+    _weightCtrl.clear(); _chestCtrl.clear(); _waistCtrl.clear(); _armCtrl.clear();
+    _loadEntries();
+  }
+
+  void _deleteEntry(String id) async {
+    await AppDatabase.instance.deleteBodyMeasurement(ref.read(currentUserIdProvider), id);
+    _loadEntries();
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = ref.watch(l10nProvider);
-    final profile = ref.watch(userProfileProvider).valueOrNull;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Body')),
       body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
         if (_entries.isNotEmpty) ...[
           SizedBox(height: 200, child: _buildChart()),
           const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [7, 30, 90].map<Widget>((d) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ChoiceChip(label: Text('${d}d'), selected: _chartDays == d, onSelected: (_) => setState(() => _chartDays = d)),
-              )).toList()),
-              const SizedBox(height: 16),
-            ],
-            Card(
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: <int>[7, 30, 90].map((d) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: ChoiceChip(label: Text('${d}d'), selected: _chartDays == d, onSelected: (_) => setState(() => _chartDays = d)),
+          )).toList()),
+          const SizedBox(height: 16),
+        ],
+        Card(
           child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
             Text('Add Entry', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
@@ -84,10 +85,11 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
         const SizedBox(height: 16),
         if (_entries.isNotEmpty) ...[
           Text('History', style: Theme.of(context).textTheme.titleSmall),
-          ..._entries.map<Widget>((e) => ListTile(
+          ..._entries.map((e) => ListTile(
             dense: true,
             title: Text('${DateFormat('MMM d').format(e.date)}  ${e.weight}kg'),
             subtitle: Text([if (e.chest != null) 'Chest: ${e.chest}cm', if (e.waist != null) 'Waist: ${e.waist}cm', if (e.leftArm != null) 'Arm: ${e.leftArm}cm'].where((s) => s.isNotEmpty).join('  ')),
+            trailing: IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red), onPressed: () => _deleteEntry(e.id)),
           )),
         ],
       ])),
@@ -97,8 +99,9 @@ class _BodyScreenState extends ConsumerState<BodyScreen> {
   Widget _buildChart() {
     final filtered = _entries.reversed.take(_chartDays).toList().reversed.toList();
     if (filtered.isEmpty) return const SizedBox.shrink();
-    final minY = filtered.map((e) => e.weight ?? 100).reduce((a, b) => a < b ? a : b) - 2;
-    final maxY = filtered.map((e) => e.weight ?? 0).reduce((a, b) => a > b ? a : b) + 2;
+    final weights = filtered.map((e) => e.weight ?? 100).toList();
+    final minY = weights.reduce((a, b) => a < b ? a : b) - 2;
+    final maxY = weights.reduce((a, b) => a > b ? a : b) + 2;
     return LineChart(LineChartData(
       minY: minY, maxY: maxY,
       gridData: FlGridData(show: true, drawVerticalLine: false),

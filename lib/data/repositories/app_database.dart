@@ -6,6 +6,7 @@ import '../models/food.dart';
 import '../models/diet_log.dart';
 import '../models/user_profile.dart';
 import '../models/workout_template.dart';
+import '../models/body_measurement.dart';
 import 'exercise_library.dart';
 
 class AppDatabase {
@@ -300,29 +301,30 @@ class AppDatabase {
     await _storage.write(key: _key(userId, 'nutrition_plan'), value: jsonEncode(plan));
   }
 
+  // ---- Body Measurements ----
+  Future<List<BodyMeasurement>> getBodyMeasurements(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'body_measurements'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List).map((e) => BodyMeasurement.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> saveBodyMeasurement(String userId, BodyMeasurement entry) async {
+    final entries = await getBodyMeasurements(userId);
+    entries.insert(0, entry);
+    await _storage.write(key: _key(userId, 'body_measurements'), value: jsonEncode(entries.map((e) => e.toJson()).toList()));
+  }
+
+  Future<void> deleteBodyMeasurement(String userId, String id) async {
+    final entries = await getBodyMeasurements(userId);
+    entries.removeWhere((e) => e.id == id);
+    await _storage.write(key: _key(userId, 'body_measurements'), value: jsonEncode(entries.map((e) => e.toJson()).toList()));
+  }
+
   String _dateStr(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
-  List<Exercise> _defaultExercises() => [
-    Exercise(id: 'ex_bench', name: '杠铃卧推', bodyPart: '胸部', category: '力量'),
-    Exercise(id: 'ex_dumbell_press', name: '哑铃卧推', bodyPart: '胸部', category: '力量'),
-    Exercise(id: 'ex_cable_fly', name: '龙门架夹胸', bodyPart: '胸部', category: '力量'),
-    Exercise(id: 'ex_squat', name: '杠铃深蹲', bodyPart: '腿部', category: '力量'),
-    Exercise(id: 'ex_legpress', name: '腿举', bodyPart: '腿部', category: '力量'),
-    Exercise(id: 'ex_deadlift', name: '硬拉', bodyPart: '背部', category: '力量'),
-    Exercise(id: 'ex_pullup', name: '引体向上', bodyPart: '背部', category: '力量'),
-    Exercise(id: 'ex_row', name: '杠铃划船', bodyPart: '背部', category: '力量'),
-    Exercise(id: 'ex_shoulder_press', name: '哑铃推举', bodyPart: '肩部', category: '力量'),
-    Exercise(id: 'ex_lateral_raise', name: '侧平举', bodyPart: '肩部', category: '力量'),
-    Exercise(id: 'ex_bicep_curl', name: '杠铃弯举', bodyPart: '手臂', category: '力量'),
-    Exercise(id: 'ex_tricep_pushdown', name: '绳索下压', bodyPart: '手臂', category: '力量'),
-    Exercise(id: 'ex_plank', name: '平板支撑', bodyPart: '核心', category: '核心'),
-    Exercise(id: 'ex_crunch', name: '卷腹', bodyPart: '核心', category: '核心'),
-    Exercise(id: 'ex_treadmill', name: '跑步机', bodyPart: '有氧', category: '有氧'),
-    Exercise(id: 'ex_cycling', name: '动感单车', bodyPart: '有氧', category: '有氧'),
-  ];
 
   List<Food> _defaultFoods() => [
     Food(

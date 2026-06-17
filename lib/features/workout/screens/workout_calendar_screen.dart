@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:intl/intl.dart';
+
 import '../../../data/models/workout_log.dart';
-import '../../../data/models/exercise.dart';
+
 import '../../../data/repositories/app_database.dart';
-import '../../../core/services/supabase_service.dart';
+
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
@@ -135,7 +135,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                     if (hasCycle)
                       Builder(builder: (ctx) {
                         final idx = (d.weekday + 6) % 7;
-                        final t = cycleTemplate![idx % cycleTemplate!.length];
+                        final t = cycleTemplate[idx % cycleTemplate.length];
                         return Container(alignment: Alignment.center, child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey}[t] ?? Colors.grey)));
                       }),
                   ]));

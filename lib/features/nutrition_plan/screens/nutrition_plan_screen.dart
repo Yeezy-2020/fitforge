@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import '../../../data/models/user_profile.dart';
 import '../../../core/utils/nutrition_calculator.dart';
 import '../../../providers/app_providers.dart';
@@ -336,7 +334,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   ]);
 
   Widget _progress(String label, double actual, double target, Color color) {
-    final pct = target > 0 ? ((actual / target).clamp(0.0, 1.0) as double) : 0.0;
+    final pct = target > 0 ? ((actual / target).clamp(0.0, 1.0)) : 0.0;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: const TextStyle(fontSize: 12)), Text('${actual.toStringAsFixed(0)} / ${target.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12)),
@@ -351,7 +349,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   Widget _pill({required String label}) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))), child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)));
 
   void _showEditActivity(L10n l10n) {
-    final idx = _activityValues.indexOf(_activityFactor);
+    
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
