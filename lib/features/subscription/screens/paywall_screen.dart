@@ -104,14 +104,14 @@ class _SubscriptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final c = theme.colorScheme;
-    final borderColor = isSelected ? c.primary : (isRecommended ? c.primary : Colors.transparent);
+    final borderColor = isSelected ? c.primary : Colors.transparent;
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        color: isSelected ? c.primaryContainer : (isRecommended ? c.primaryContainer : null),
+        color: isSelected ? c.primaryContainer : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: borderColor, width: isSelected ? 2 : (isRecommended ? 1 : 0)),
+          side: BorderSide(color: borderColor, width: isSelected ? 2 : 0),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
