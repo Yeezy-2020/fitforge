@@ -226,13 +226,14 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         title: const SizedBox.shrink(),
         toolbarHeight: 4,
       ),
-      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _pill(label: planLabel),
-        ),
+      body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
         // Target macros
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
+          Row(children: [
+            _pill(label: planLabel),
+            const Spacer(),
+          ]),
+          const SizedBox(height: 12),
           Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
