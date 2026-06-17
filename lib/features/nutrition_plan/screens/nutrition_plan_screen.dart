@@ -262,13 +262,6 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
             const SizedBox(height: 8),
             _progress('Fat', actualF, targets.fat, Colors.red),
           ],
-          _progress('kcal', actualKcal, targets.cals, Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 8),
-          _progress('Protein', actualP, targets.protein, Colors.blue),
-          const SizedBox(height: 8),
-          _progress('Carbs', actualC, targets.carbs, Colors.orange),
-          const SizedBox(height: 8),
-          _progress('Fat', actualF, targets.fat, Colors.red),
         ]))),
         const SizedBox(height: 12),
         // TDEE info
