@@ -245,10 +245,9 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
           Row(children: [
             _pill(label: planLabel),
-            const Spacer(),
-            Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
           ]),
+          const SizedBox(height: 8),
+          Center(child: Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium)),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
             _stat(targets.cals.toStringAsFixed(0), 'kcal', Theme.of(context).colorScheme.primary),
