@@ -430,7 +430,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
                 // Presets
                 Text('Presets', style: Theme.of(ctx).textTheme.titleSmall),
                 const SizedBox(height: 8),
-                Wrap(spacing: 6, children: _presetTemplates.entries.map((e) => ActionChip(
+                Wrap(spacing: 6, runSpacing: 10, children: _presetTemplates.entries.map((e) => ActionChip(
                   label: Text(e.key, style: const TextStyle(fontSize: 11)),
                   onPressed: () => setSheetState(() {
                     template.clear(); template.addAll(e.value);
@@ -439,10 +439,10 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
                     Navigator.pop(ctx);
                   }),
                 )).toList()),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Text('Custom Pattern', style: Theme.of(ctx).textTheme.titleSmall),
                 const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: template.asMap().entries.map((e) {
+                Wrap(spacing: 8, runSpacing: 10, children: template.asMap().entries.map((e) {
                   final t = e.value;
                   return GestureDetector(
                     onTap: () {
