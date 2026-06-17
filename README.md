@@ -157,6 +157,67 @@ bash scripts/pre_push.sh
 | 基础 BMR | Mifflin-St Jeor | 男: 10W + 6.25H − 5A + 5, 女: 10W + 6.25H − 5A − 161 |
 | 蛋白参考 | ISSN 1.6–2.2 g/kg | 按目标动态计算 |
 
+## 开发注意事项
+
+### Pre-push 检查
+
+每次 `git push` 前务必执行（或配置 Git hook 自动运行）：
+
+```bash
+bash scripts/pre_push.sh
+```
+
+脚本会依次执行：`flutter analyze` → `flutter test`（88 项） → widget dump → dead button scan。**任何一项失败均不允许推送。**
+
+### 死按钮 (Dead Button) 检查
+
+禁止代码中出现空回调 `onPressed: () => {}`。所有按钮必须有实际行为：
+
+```bash
+DEAD=$(grep -rn "onPressed: () => {}" lib/ --include="*.dart" | wc -l)
+# 结果必须为 0
+```
+
+CI 也会执行此项检查。如需占位按钮，请使用条件禁用（`onPressed: condition ? fn : null`）而非空回调。
+
+### flutter analyze 已知警告
+
+以下 8 个 info 级别警告属于已知项，不会阻止构建或测试：
+
+| 文件 | 警告 | 原因 |
+|------|------|------|
+| `diet_log_screen.dart:106` | `use_build_context_synchronously` | 跨 async 使用 context |
+| `settings_screen.dart:45` | `groupValue` deprecated | 等待替换为 RadioGroup |
+| `exercise_detail_screen.dart:25` | `unnecessary_underscores` | 待清理 |
+| `workout_calendar_screen.dart:173` | `onReorder` deprecated | 待迁移到 onReorderItem |
+| `test/dump_test.dart:30-38` | `avoid_print` | 测试用 print，无影响 |
+
+禁止引入新的 error 或 warning 级别问题。
+
+### 网络环境
+
+构建/部署环境可能无法直接访问 `github.com`（TLS 被干扰），需通过代理：
+
+```bash
+# V2Ray HTTP 代理示例
+git config --local http.proxy http://127.0.0.1:10809
+git config --local https.proxy http://127.0.0.1:10809
+# 推送完成后建议清除：
+git config --local --unset http.proxy
+git config --local --unset https.proxy
+```
+
+### Supabase 配置
+
+- **项目 URL**: `https://ofkdjqfamtuwfzyfncvt.supabase.co`
+- **认证**: Supabase Auth（邮箱密码 + Google/Apple TODO）
+- **数据**: 本地优先（SecureStorage），Supabase 仅作同步
+- 测试账号：`test@fitforge.com` / `123456`
+
+### 图片反馈流程
+
+UI 问题截图通过 GitHub Issues 提交，附带步骤描述和预期行为，便于复现。
+
 ## License
 
 MIT
