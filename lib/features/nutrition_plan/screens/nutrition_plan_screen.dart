@@ -243,9 +243,10 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
       body: SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(children: [
         // Target macros
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [
-          Stack(alignment: Alignment.center, children: [
-            Align(alignment: Alignment.centerLeft, child: _pill(label: planLabel)),
-            Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium),
+          Row(children: [
+            _pill(label: planLabel),
+            Expanded(child: Center(child: Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium))),
+            const SizedBox(width: 50),
           ]),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -432,17 +433,18 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: 10, children: _presetTemplates.entries.map((e) => ActionChip(
                   label: Text(e.key, style: const TextStyle(fontSize: 11)),
-                  onPressed: () => setSheetState(() {
-                    template.clear(); template.addAll(e.value);
-                    setState(() { _cycleTemplate = e.value; _planStartDate = DateTime.now(); });
-                    _savePlan();
+                  onPressed: () {
+                    _cycleTemplate = e.value;
+                    _planStartDate = DateTime.now();
                     Navigator.pop(ctx);
-                  }),
+                    _savePlan();
+                    setState(() {});
+                  },
                 )).toList()),
                 const SizedBox(height: 20),
                 Text('Custom Pattern', style: Theme.of(ctx).textTheme.titleSmall),
                 const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 10, children: template.asMap().entries.map((e) {
+                Wrap(spacing: 8, runSpacing: 8, children: template.asMap().entries.map((e) {
                   final t = e.value;
                   return GestureDetector(
                     onTap: () {
@@ -450,14 +452,15 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
                       setSheetState(() => template[e.key] = next);
                     },
                     child: Container(
-                      padding: const EdgeInsets.only(left: 10, right: 6, top: 4, bottom: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(20)),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Text('Day ${e.key + 1}: ${labels[t]}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         if (template.length > 2)
                           GestureDetector(
+                            behavior: HitTestBehavior.opaque,
                             onTap: () => setSheetState(() => template.removeAt(e.key)),
-                            child: const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.close, size: 14)),
+                            child: const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.close, size: 16)),
                           ),
                       ]),
                     ),
@@ -491,12 +494,11 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
                   const Spacer(),
                   FilledButton(onPressed: () {
                     final d = DateTime.tryParse(startCtrl.text);
-                    setState(() {
-                      _cycleTemplate = template;
-                      _planStartDate = d ?? DateTime.now();
-                    });
-                    _savePlan();
+                    _cycleTemplate = template;
+                    _planStartDate = d ?? DateTime.now();
                     Navigator.pop(ctx);
+                    _savePlan();
+                    setState(() {});
                   }, child: const Text('Save')),
                 ]),
               ]),
