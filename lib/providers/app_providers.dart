@@ -22,6 +22,7 @@ final isOnlineProvider = StateProvider<bool>((ref) => true);
 
 // Share nutrition plan with calendar for carb cycle markers
 final nutritionCycleProvider = StateProvider<List<String>?>((ref) => null);
+final nutritionStartDateProvider = StateProvider<DateTime?>((ref) => null);
 
 // Track which dates have diet logs (for calendar green dots)
 class DietDatesNotifier extends StateNotifier<Set<String>> {

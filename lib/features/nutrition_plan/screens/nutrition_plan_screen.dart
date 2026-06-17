@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../data/models/user_profile.dart';
 import '../../../core/utils/nutrition_calculator.dart';
 import '../../../providers/app_providers.dart';
@@ -21,7 +22,16 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   String _experience = 'intermediate';
   double _activityFactor = 1.55;
   List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
+  DateTime? _planStartDate;
   int? _lastStep;
+
+  static const _presetTemplates = {
+    'Classic 7-Day': ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'],
+    '3-Day Rolling': ['low', 'medium', 'high'],
+    '5-Day Split': ['low', 'low', 'medium', 'medium', 'high'],
+    '4-Day Low Focus': ['low', 'low', 'low', 'medium'],
+    '2-Day Alternating': ['low', 'high'],
+  };
 
   static const _activityLabels = ['Sedentary', 'Lightly Active', 'Moderate', 'Very Active', 'Extremely Active'];
   static const _activityFrequency = ['0-1 ×/week', '1-2 ×/week', '3-4 ×/week', '5-6 ×/week', '6-7 ×/week'];
@@ -43,19 +53,23 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
         _planType = saved['planType'] as String? ?? 'carb_cycle';
         _experience = saved['experience'] as String? ?? 'intermediate';
         _activityFactor = (saved['activityFactor'] as num?)?.toDouble() ?? 1.55;
-        _cycleTemplate = (saved['cycleTemplate'] as List?)?.cast<String>() ?? ['low','low','medium','low','medium','medium','high'];
-        if (_planType == 'carb_cycle') ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate;
+        _cycleTemplate = (saved['cycleTemplate'] as List?)?.cast<String>() ?? _cycleTemplate;
+        if (saved['planStartDate'] != null) _planStartDate = DateTime.parse(saved['planStartDate'] as String);
+        if (_cycleTemplate.length < 2) _cycleTemplate = ['low', 'high'];
+        if (_planType == 'carb_cycle') { ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate; ref.read(nutritionStartDateProvider.notifier).state = _planStartDate; }
       });
     }
   }
 
   Future<void> _savePlan() async {
     final userId = ref.read(currentUserIdProvider);
+    _planStartDate ??= DateTime.now();
     await AppDatabase.instance.saveNutritionPlan(userId, {
       'goal': _goal, 'planType': _planType, 'experience': _experience,
       'activityFactor': _activityFactor, 'cycleTemplate': _cycleTemplate,
+      'planStartDate': _planStartDate?.toIso8601String(),
     });
-    if (_planType == 'carb_cycle') ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate;
+    if (_planType == 'carb_cycle') { ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate; ref.read(nutritionStartDateProvider.notifier).state = _planStartDate; }
   }
 
   @override
@@ -196,8 +210,9 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
     ({double cals, double protein, double carbs, double fat}) targets;
     String planLabel = '';
     if (_planType == 'carb_cycle') {
-      final dayIdx = (today.weekday + 6) % 7;
-      final templateDay = _cycleTemplate[dayIdx % _cycleTemplate.length];
+      final startDate = _planStartDate ?? DateTime.now();
+      final daysSinceStart = today.difference(startDate).inDays;
+      final templateDay = _cycleTemplate[daysSinceStart.clamp(0, 99999) % _cycleTemplate.length];
       targets = calc.carbCycleDay(profile, templateDay, _activityFactor, deficit.toDouble());
       planLabel = {'high': 'High Carb', 'medium': 'Med Carb', 'low': 'Low Carb'}[templateDay] ?? '';
     } else if (_planType == 'carb_taper') {
@@ -284,22 +299,37 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
           const SizedBox(height: 12),
           Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Text('Weekly Cycle', style: Theme.of(context).textTheme.titleSmall),
+              Text('Cycle Pattern', style: Theme.of(context).textTheme.titleSmall),
               const Spacer(),
               IconButton(icon: const Icon(Icons.edit, size: 16), onPressed: _showCycleEditor, tooltip: 'Edit template'),
             ]),
             const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].asMap().entries.map((e) {
-              final t = _cycleTemplate[e.key];
-              final isToday = e.key == (today.weekday + 6) % 7;
-              final colors = {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey};
-              return Column(children: [
-                Text(e.value, style: TextStyle(fontSize: 11, color: Colors.grey)),
-                Container(width: 32, height: 32, margin: const EdgeInsets.only(top: 4),
-                  decoration: BoxDecoration(color: (colors[t] ?? Colors.grey).withValues(alpha: isToday ? 1 : 0.3), borderRadius: BorderRadius.circular(16), border: isToday ? Border.all(width: 2, color: Colors.white) : null),
-                  child: Center(child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isToday ? Colors.white : colors[t])))),
-              ]);
-            }).toList()),
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _cycleTemplate.length,
+                itemBuilder: (ctx, i) {
+                  final startDate = _planStartDate ?? DateTime.now();
+                  final todayIdx = DateTime.now().difference(startDate).inDays;
+                  final isToday = todayIdx.clamp(0, 99999) % _cycleTemplate.length == i;
+                  final t = _cycleTemplate[i];
+                  final colors = {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey};
+                  return Container(
+                    width: 36, height: 36, margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color: (colors[t] ?? Colors.grey).withValues(alpha: isToday ? 1 : 0.3),
+                      borderRadius: BorderRadius.circular(18),
+                      border: isToday ? Border.all(width: 2, color: Colors.white) : null,
+                    ),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Text('${i + 1}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isToday ? Colors.white : colors[t])),
+                      Text(t[0].toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isToday ? Colors.white : colors[t])),
+                    ]),
+                  );
+                },
+              ),
+            ),
           ]))),
         ],
         const SizedBox(height: 16),
@@ -380,29 +410,93 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
   void _showCycleEditor() {
     final labels = {'low': 'Low Carb', 'medium': 'Med Carb', 'high': 'High Carb'};
     final colors = {'low': Colors.grey, 'medium': Colors.blue, 'high': Colors.orange};
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Edit Weekly Cycle'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: List.generate(7, (i) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(children: [
-              SizedBox(width: 32, child: Text(days[i], style: const TextStyle(fontWeight: FontWeight.bold))),
-              const SizedBox(width: 8),
-              ...['low', 'medium', 'high'].map((t) => Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: ChoiceChip(
-                  label: Text(labels[t]!, style: const TextStyle(fontSize: 11)),
-                  selected: _cycleTemplate[i] == t,
-                  selectedColor: colors[t]!.withValues(alpha: 0.3),
-                  onSelected: (_) => setDialogState(() => _cycleTemplate[i] = t),
+        builder: (ctx, setSheetState) {
+          final template = List<String>.from(_cycleTemplate);
+          final startCtrl = TextEditingController(text: _planStartDate != null ? DateFormat('yyyy-MM-dd').format(_planStartDate!) : '');
+          return DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            expand: false,
+            builder: (ctx, scrollCtrl) => SingleChildScrollView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.all(16),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Edit Cycle Pattern', style: Theme.of(ctx).textTheme.titleLarge),
+                const SizedBox(height: 4),
+                Text('${template.length} days · Today is highlighted', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                const SizedBox(height: 16),
+                // Presets
+                Text('Presets', style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, children: _presetTemplates.entries.map((e) => ActionChip(
+                  label: Text(e.key, style: const TextStyle(fontSize: 11)),
+                  onPressed: () => setSheetState(() {
+                    template.clear(); template.addAll(e.value);
+                    setState(() { _cycleTemplate = e.value; _planStartDate = DateTime.now(); });
+                    _savePlan();
+                    Navigator.pop(ctx);
+                  }),
+                )).toList()),
+                const SizedBox(height: 16),
+                Text('Custom Pattern', style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: template.asMap().entries.map((e) {
+                  final t = e.value;
+                  return InputChip(
+                    label: Text('Day ${e.key + 1}: ${labels[t]}', style: const TextStyle(fontSize: 11)),
+                    selected: true,
+                    deleteIcon: template.length > 2 ? const Icon(Icons.close, size: 14) : null,
+                    onDeleted: template.length > 2 ? () => setSheetState(() => template.removeAt(e.key)) : null,
+                    onSelected: (_) {
+                      final next = {'low': 'medium', 'medium': 'high', 'high': 'low'}[t] ?? 'low';
+                      setSheetState(() => template[e.key] = next);
+                    },
+                  );
+                }).toList()),
+                if (template.length < 30) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => setSheetState(() => template.add('medium')),
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Day'),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // Start date
+                Text('Start Date', style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text('Cycle starts from this date (leave empty for today)', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: startCtrl,
+                  decoration: const InputDecoration(hintText: 'yyyy-MM-dd', isDense: true, border: OutlineInputBorder()),
+                  onChanged: (v) {
+                    final d = DateTime.tryParse(v);
+                    if (d != null) setSheetState(() {});
+                  },
                 ),
-              )),
-            ]),
-          ))),
-        ),
+                const SizedBox(height: 16),
+                Row(children: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  const Spacer(),
+                  FilledButton(onPressed: () {
+                    final d = DateTime.tryParse(startCtrl.text);
+                    setState(() {
+                      _cycleTemplate = template;
+                      _planStartDate = d ?? DateTime.now();
+                    });
+                    _savePlan();
+                    Navigator.pop(ctx);
+                  }, child: const Text('Save')),
+                ]),
+              ]),
+            ),
+          );
+        },
       ),
     );
   }
@@ -427,6 +521,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> {
             final userId = ref.read(currentUserIdProvider);
             await AppDatabase.instance.saveNutritionPlan(userId, {}); // clear saved
             ref.read(nutritionCycleProvider.notifier).state = null;
+            ref.read(nutritionStartDateProvider.notifier).state = null;
             setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; });
           }, child: const Text('Reset')),
         ],

@@ -83,6 +83,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
     final k = '${_focusedDay.year}-${_focusedDay.month.toString().padLeft(2, '0')}';
     final workoutDates = cache[k] ?? {};
     final cycleTemplate = ref.watch(nutritionCycleProvider);
+    final cycleStartDate = ref.watch(nutritionStartDateProvider);
     final dietCache = ref.watch(dietCacheProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final logCache = ref.watch(workoutLogCacheProvider);
@@ -134,8 +135,10 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                     if (hasDiet && hasCycle) const SizedBox(width: 2),
                     if (hasCycle)
                       Builder(builder: (ctx) {
-                        final idx = (d.weekday + 6) % 7;
-                        final t = cycleTemplate[idx % cycleTemplate.length];
+                        final startDate = cycleStartDate ?? DateTime.now();
+                        final dayIdx = d.difference(startDate).inDays;
+                        final idx = dayIdx.clamp(0, 99999) % cycleTemplate.length;
+                        final t = cycleTemplate[idx];
                         return Container(alignment: Alignment.center, child: Text(t[0].toUpperCase(), style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: {'high': Colors.orange, 'medium': Colors.blue, 'low': Colors.grey}[t] ?? Colors.grey)));
                       }),
                   ]));
