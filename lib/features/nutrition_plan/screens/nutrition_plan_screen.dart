@@ -132,24 +132,23 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
           },
           child: KeyedSubtree(
             key: ValueKey(_step),
-            child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _step == 2 ? _stepDuration(l10n, isEn) : _stepActivity(l10n, isEn),
+            child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _step == 2 ? _stepActivity(l10n, isEn) : _stepDuration(l10n, isEn),
           ),
         )),
         const SizedBox(height: 16),
         Row(children: [
               if (_step > 0) TextButton(onPressed: () {
                 _lastStep = _step;
-                if (_step == 3 && _goal == 'maintain') { setState(() => _step = 0); }
-                else if (_step == 3 && _planType != 'carb_taper') { setState(() => _step = 1); }
+                if (_step == 3) { setState(() => _step = 2); }
+                else if (_step == 2 && _goal == 'maintain') { setState(() => _step = 0); }
                 else { setState(() => _step--); }
               }, child: const Text('Back')),
               const Spacer(),
               FilledButton(onPressed: () {
                 _lastStep = _step;
-                if (_step == 0 && _goal == 'maintain') { setState(() => _step = 3); }
+                if (_step == 0 && _goal == 'maintain') { setState(() => _step = 2); }
                 else if (_step == 0) { setState(() => _step = 1); }
-                else if (_step == 1 && _planType == 'carb_taper') { setState(() => _step = 2); }
-                else if (_step == 1) { setState(() => _step = 3); }
+                else if (_step == 1) { setState(() => _step = 2); }
                 else if (_step == 2) { setState(() => _step = 3); }
                 else if (_step == 3) { _savePlan(); setState(() => _step = 4); }
               }, child: Text(_step == 3 ? 'Get Started' : 'Next')),
@@ -159,14 +158,12 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
   }
 
   Widget _stepper() {
-    final showCount = _goal == 'maintain' ? 2 : (_planType == 'carb_taper' ? 4 : 3);
+    final showCount = _goal == 'maintain' ? 3 : 4;
     int displayStep;
     if (_goal == 'maintain') {
-      displayStep = _step >= 3 ? 1 : _step;
-    } else if (_planType == 'carb_taper') {
-      displayStep = _step;
-    } else {
       displayStep = _step >= 2 ? _step - 1 : _step;
+    } else {
+      displayStep = _step;
     }
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(showCount, (i) => Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -240,7 +237,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
     return Column(children: [
       Text('Plan Duration', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
-      Text('How many days will you run this taper?', style: TextStyle(color: Colors.grey)),
+      Text('How many days will you follow this plan?', style: TextStyle(color: Colors.grey)),
       const SizedBox(height: 32),
       _goalCard(Icons.calendar_today, '4 Weeks (28 days)', 'Standard mini-cut duration.', _planDurationDays == 28, () => setState(() => _planDurationDays = 28)),
       const SizedBox(height: 12),
@@ -330,8 +327,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
           Row(children: [
             _pill(label: planLabel),
             Expanded(child: Center(child: Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium))),
-            if (_planType != 'bulk')
-              Text(_buildDayLabel(today), style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+            Text(_buildDayLabel(today), style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
           ]),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -496,18 +492,16 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
                   ButtonSegment(value: 'advanced', label: Text('Advanced')),
                 ], selected: {_experience}, onSelectionChanged: (v) => setDialogState(() => _experience = v.first)),
               ],
-              if (_planType == 'carb_taper') ...[
-                const SizedBox(height: 16),
-                Text('Plan Duration', style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 8, children: [28, 56, 84].map((d) => ChoiceChip(
-                  label: Text('$d days', style: const TextStyle(fontSize: 11)),
-                  selected: _planDurationDays == d,
-                  onSelected: (_) => setDialogState(() => _planDurationDays = d),
-                )).toList()),
-                const SizedBox(height: 8),
-                OutlinedButton(onPressed: () { Navigator.pop(ctx); _showDurationPicker(); }, child: const Text('Custom...')),
-              ],
+              const SizedBox(height: 16),
+              Text('Plan Duration', style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: [28, 56, 84].map((d) => ChoiceChip(
+                label: Text('$d days', style: const TextStyle(fontSize: 11)),
+                selected: _planDurationDays == d,
+                onSelected: (_) => setDialogState(() => _planDurationDays = d),
+              )).toList()),
+              const SizedBox(height: 8),
+              OutlinedButton(onPressed: () { Navigator.pop(ctx); _showDurationPicker(); }, child: const Text('Custom...')),
             ]),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
