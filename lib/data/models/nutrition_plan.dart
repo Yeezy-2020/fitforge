@@ -8,6 +8,7 @@ class NutritionPlanConfig {
   final double fatGPerKg; // for carb taper
   final int refeedIntervalDays; // for carb taper refeed
   final List<String>? cycleTemplate; // for carb cycle ['low','low','medium','low','medium','medium','high']
+  final int? planDurationDays; // for carb taper, null = unlimited
 
   const NutritionPlanConfig({
     required this.planType,
@@ -19,6 +20,7 @@ class NutritionPlanConfig {
     this.fatGPerKg = 1.0,
     this.refeedIntervalDays = 14,
     this.cycleTemplate,
+    this.planDurationDays,
   });
 
   factory NutritionPlanConfig.fromJson(Map<String, dynamic> json) => NutritionPlanConfig(
@@ -31,6 +33,7 @@ class NutritionPlanConfig {
     fatGPerKg: (json['fatGPerKg'] as num?)?.toDouble() ?? 1.0,
     refeedIntervalDays: json['refeedIntervalDays'] as int? ?? 14,
     cycleTemplate: (json['cycleTemplate'] as List?)?.cast<String>(),
+    planDurationDays: json['planDurationDays'] as int?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -43,5 +46,6 @@ class NutritionPlanConfig {
     'fatGPerKg': fatGPerKg,
     'refeedIntervalDays': refeedIntervalDays,
     if (cycleTemplate != null) 'cycleTemplate': cycleTemplate,
+    if (planDurationDays != null) 'planDurationDays': planDurationDays,
   };
 }

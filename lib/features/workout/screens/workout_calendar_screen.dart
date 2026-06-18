@@ -128,6 +128,23 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
                   final hasDiet = (dietCache[dateKey] ?? []).isNotEmpty;
                   final hasCycle = cycleTemplate != null;
                   if (!hasWorkout && !hasDiet && !hasCycle) return null;
+                  // Only render cycle markers on or after plan start
+                  if (hasCycle) {
+                    final startDate = cycleStartDate ?? DateTime.now();
+                    final dayIdx = d.difference(startDate).inDays;
+                    if (dayIdx < 0) {
+                      // Before plan start: hide cycle, show dots only if workout/diet
+                      if (!hasWorkout && !hasDiet) return null;
+                      return Positioned(bottom: 1, child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2)]),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (hasWorkout) Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
+                          if (hasWorkout && hasDiet) const SizedBox(width: 2),
+                          if (hasDiet) Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
+                        ])));
+                    }
+                  }
                   return Positioned(bottom: 1, child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 2)]),

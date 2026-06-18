@@ -23,6 +23,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
   double _activityFactor = 1.55;
   List<String> _cycleTemplate = ['low', 'low', 'medium', 'low', 'medium', 'medium', 'high'];
   DateTime? _planStartDate;
+  int? _planDurationDays;
   int? _lastStep;
   bool _didTriggerAnim = false;
 
@@ -60,12 +61,13 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
     final saved = await AppDatabase.instance.getNutritionPlan(userId);
     if (saved != null && mounted) {
       setState(() {
-        _step = 3; // Skip to dashboard
+        _step = 4; // Skip to dashboard
         _goal = saved['goal'] as String?;
         _planType = saved['planType'] as String? ?? 'carb_cycle';
         _experience = saved['experience'] as String? ?? 'intermediate';
         _activityFactor = (saved['activityFactor'] as num?)?.toDouble() ?? 1.55;
         _cycleTemplate = (saved['cycleTemplate'] as List?)?.cast<String>() ?? _cycleTemplate;
+        _planDurationDays = saved['planDurationDays'] as int?;
         if (saved['planStartDate'] != null) _planStartDate = DateTime.parse(saved['planStartDate'] as String);
         if (_cycleTemplate.length < 2) _cycleTemplate = ['low', 'high'];
         if (_planType == 'carb_cycle') { ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate; ref.read(nutritionStartDateProvider.notifier).state = _planStartDate; }
@@ -80,6 +82,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
       'goal': _goal, 'planType': _planType, 'experience': _experience,
       'activityFactor': _activityFactor, 'cycleTemplate': _cycleTemplate,
       'planStartDate': _planStartDate?.toIso8601String(),
+      if (_planDurationDays != null) 'planDurationDays': _planDurationDays,
     });
     if (_planType == 'carb_cycle') { ref.read(nutritionCycleProvider.notifier).state = _cycleTemplate; ref.read(nutritionStartDateProvider.notifier).state = _planStartDate; }
   }
@@ -91,7 +94,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
     if (profile == null) {
       return Scaffold(appBar: AppBar(title: Text(l10n.get('nutritionPlan'))), body: Center(child: Text(l10n.get('setupBodyFirst'))));
     }
-    if (_step < 3) {
+    if (_step < 4) {
       _didTriggerAnim = false;
       return _buildOnboarding(l10n, profile);
     }
@@ -129,29 +132,46 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
           },
           child: KeyedSubtree(
             key: ValueKey(_step),
-            child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _stepActivity(l10n, isEn),
+            child: _step == 0 ? _stepGoal(l10n, isEn) : _step == 1 ? _stepPlan(l10n, isEn) : _step == 2 ? _stepDuration(l10n, isEn) : _stepActivity(l10n, isEn),
           ),
         )),
         const SizedBox(height: 16),
         Row(children: [
-              if (_step > 0) TextButton(onPressed: () { _lastStep = _step; setState(() => _step--); }, child: const Text('Back')),
+              if (_step > 0) TextButton(onPressed: () {
+                _lastStep = _step;
+                if (_step == 3 && _goal == 'maintain') { setState(() => _step = 0); }
+                else if (_step == 3 && _planType != 'carb_taper') { setState(() => _step = 1); }
+                else { setState(() => _step--); }
+              }, child: const Text('Back')),
               const Spacer(),
               FilledButton(onPressed: () {
                 _lastStep = _step;
-                if (_step == 2) { _savePlan(); setState(() => _step = 3); } else { setState(() => _step++); }
-              }, child: Text(_step == 2 ? 'Get Started' : 'Next')),
+                if (_step == 0 && _goal == 'maintain') { setState(() => _step = 3); }
+                else if (_step == 0) { setState(() => _step = 1); }
+                else if (_step == 1 && _planType == 'carb_taper') { setState(() => _step = 2); }
+                else if (_step == 1) { setState(() => _step = 3); }
+                else if (_step == 2) { setState(() => _step = 3); }
+                else if (_step == 3) { _savePlan(); setState(() => _step = 4); }
+              }, child: Text(_step == 3 ? 'Get Started' : 'Next')),
         ]),
       ])),
     );
   }
 
   Widget _stepper() {
-    final steps = _goal == 'maintain' ? 2 : 3;
-    final current = _goal == 'maintain' && _step >= 2 ? _step - 1 : _step;
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(steps, (i) => Container(
+    final showCount = _goal == 'maintain' ? 2 : (_planType == 'carb_taper' ? 4 : 3);
+    int displayStep;
+    if (_goal == 'maintain') {
+      displayStep = _step >= 3 ? 1 : _step;
+    } else if (_planType == 'carb_taper') {
+      displayStep = _step;
+    } else {
+      displayStep = _step >= 2 ? _step - 1 : _step;
+    }
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(showCount, (i) => Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      width: i == current ? 32 : 8, height: 8,
-      decoration: BoxDecoration(color: i == current ? Theme.of(context).colorScheme.primary : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
+      width: i == displayStep ? 32 : 8, height: 8,
+      decoration: BoxDecoration(color: i == displayStep ? Theme.of(context).colorScheme.primary : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)),
     )));
   }
 
@@ -216,6 +236,48 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
     ]);
   }
 
+  Widget _stepDuration(L10n l10n, bool isEn) {
+    return Column(children: [
+      Text('Plan Duration', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      Text('How many days will you run this taper?', style: TextStyle(color: Colors.grey)),
+      const SizedBox(height: 32),
+      _goalCard(Icons.calendar_today, '4 Weeks (28 days)', 'Standard mini-cut duration.', _planDurationDays == 28, () => setState(() => _planDurationDays = 28)),
+      const SizedBox(height: 12),
+      _goalCard(Icons.calendar_month, '8 Weeks (56 days)', 'Moderate fat loss phase.', _planDurationDays == 56, () => setState(() => _planDurationDays = 56)),
+      const SizedBox(height: 12),
+      _goalCard(Icons.date_range, '12 Weeks (84 days)', 'Extended deficit, refeeds included.', _planDurationDays == 84, () => setState(() => _planDurationDays = 84)),
+      const SizedBox(height: 12),
+      _goalCard(Icons.edit_calendar, 'Custom', 'Set your own duration.', _planDurationDays != null && ![28, 56, 84].contains(_planDurationDays), () => _showDurationPicker()),
+    ]);
+  }
+
+  void _showDurationPicker() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        int days = _planDurationDays ?? 30;
+        return StatefulBuilder(
+          builder: (ctx, setD) => AlertDialog(
+            title: const Text('Custom Duration'),
+            content: Row(children: [
+              IconButton(onPressed: () => days > 1 ? setD(() => days--) : null, icon: const Icon(Icons.remove_circle_outline)),
+              Expanded(child: Text('$days days', textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+              IconButton(onPressed: () => days < 180 ? setD(() => days++) : null, icon: const Icon(Icons.add_circle_outline)),
+            ]),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(onPressed: () {
+                setState(() => _planDurationDays = days);
+                Navigator.pop(ctx);
+              }, child: const Text('OK')),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // ================================
   // DASHBOARD
   // ================================
@@ -268,7 +330,8 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
           Row(children: [
             _pill(label: planLabel),
             Expanded(child: Center(child: Text('Daily Targets', style: Theme.of(context).textTheme.titleMedium))),
-            const SizedBox(width: 50),
+            if (_planType != 'bulk')
+              Text(_buildDayLabel(today), style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
           ]),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -402,8 +465,14 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
 
   Widget _pill({required String label}) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3))), child: Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)));
 
+  String _buildDayLabel(DateTime today) {
+    final startDate = _planStartDate ?? DateTime.now();
+    final dayCount = today.difference(startDate).inDays + 1;
+    final d = _planDurationDays;
+    return d != null ? 'Day $dayCount/$d' : 'Day $dayCount';
+  }
+
   void _showEditActivity(L10n l10n) {
-    
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -426,6 +495,18 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
                   ButtonSegment(value: 'intermediate', label: Text('Intermed.')),
                   ButtonSegment(value: 'advanced', label: Text('Advanced')),
                 ], selected: {_experience}, onSelectionChanged: (v) => setDialogState(() => _experience = v.first)),
+              ],
+              if (_planType == 'carb_taper') ...[
+                const SizedBox(height: 16),
+                Text('Plan Duration', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [28, 56, 84].map((d) => ChoiceChip(
+                  label: Text('$d days', style: const TextStyle(fontSize: 11)),
+                  selected: _planDurationDays == d,
+                  onSelected: (_) => setDialogState(() => _planDurationDays = d),
+                )).toList()),
+                const SizedBox(height: 8),
+                OutlinedButton(onPressed: () { Navigator.pop(ctx); _showDurationPicker(); }, child: const Text('Custom...')),
               ],
             ]),
             actions: [
@@ -542,10 +623,9 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
   }
 
   int _daysUntilRefeed() {
-    // Simple calculation: next refeed in 14 days from plan start
-    // For now, return a placeholder based on today's day of year % 14
-    final dayOfYear = DateTime.now().difference(DateTime(DateTime.now().year)).inDays;
-    return 14 - (dayOfYear % 14);
+    final start = _planStartDate ?? DateTime.now();
+    final elapsed = DateTime.now().difference(start).inDays;
+    return 14 - (elapsed % 14);
   }
 
   void _confirmReset(L10n l10n) {
@@ -562,7 +642,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
             await AppDatabase.instance.saveNutritionPlan(userId, {}); // clear saved
             ref.read(nutritionCycleProvider.notifier).state = null;
             ref.read(nutritionStartDateProvider.notifier).state = null;
-            setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; });
+            setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; _planDurationDays = null; });
           }, child: const Text('Reset')),
         ],
       ),
