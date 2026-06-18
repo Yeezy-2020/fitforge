@@ -410,8 +410,8 @@ class _DietLogList extends ConsumerWidget {
             final newGrams = double.tryParse(gramsCtrl.text) ?? log.grams;
             final newCalories = (food?.caloriesPer100g ?? 0) * (newGrams / 100);
             final updated = DietLog(id: log.id, userId: log.userId, foodId: log.foodId, date: log.date, mealType: log.mealType, grams: newGrams, calories: newCalories, createdAt: log.createdAt);
-            AppDatabase.instance.deleteDietLog(ref.read(currentUserIdProvider), log.id);
-            AppDatabase.instance.addDietLog(ref.read(currentUserIdProvider), updated);
+            await AppDatabase.instance.deleteDietLog(ref.read(currentUserIdProvider), log.id);
+            await AppDatabase.instance.addDietLog(ref.read(currentUserIdProvider), updated);
             try { await ref.read(supabaseProvider).addDietLog(updated); } catch (_) {}
             ref.read(dietCacheProvider.notifier).updateLog(updated);
             if (ctx.mounted) Navigator.pop(ctx);

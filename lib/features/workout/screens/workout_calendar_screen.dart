@@ -238,14 +238,14 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
       actions: [
         TextButton.icon(icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red), label: Text(l.get('delete'), style: const TextStyle(color: Colors.red)), onPressed: () { Navigator.pop(ctx); _confirmDelete(ctx, ref, log); }),
         TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l.get('cancel'))),
-        FilledButton(onPressed: () {
+        FilledButton(onPressed: () async {
           final ns = int.tryParse(s.text)?.clamp(1, 999) ?? log.sets;
           final nr = int.tryParse(r.text)?.clamp(1, 9999) ?? log.reps;
           double nw = double.tryParse(w.text) ?? log.weightKg;
           if (trainUnit == WeightUnit.lb) nw = nw / kgToLb;
           final up = WorkoutLog(id: log.id, userId: log.userId, exerciseId: log.exerciseId, date: log.date, sets: ns, reps: nr, weightKg: nw, createdAt: log.createdAt);
-          AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), log.id);
-          AppDatabase.instance.addWorkoutLog(ref.read(currentUserIdProvider), up);
+          await AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), log.id);
+          await AppDatabase.instance.addWorkoutLog(ref.read(currentUserIdProvider), up);
           try { ref.read(supabaseProvider).addWorkoutLog(up); } catch (_) {}
           ref.read(workoutLogCacheProvider.notifier).loadDate(log.date);
           Navigator.pop(ctx);
