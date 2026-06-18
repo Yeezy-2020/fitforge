@@ -250,28 +250,32 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
   }
 
   void _showDurationPicker() {
+    final ctrl = TextEditingController(text: (_planDurationDays ?? 30).toString());
     showDialog(
       context: context,
-      builder: (ctx) {
-        int days = _planDurationDays ?? 30;
-        return StatefulBuilder(
-          builder: (ctx, setD) => AlertDialog(
-            title: const Text('Custom Duration'),
-            content: Row(children: [
-              IconButton(onPressed: () => days > 1 ? setD(() => days--) : null, icon: const Icon(Icons.remove_circle_outline)),
-              Expanded(child: Text('$days days', textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-              IconButton(onPressed: () => days < 180 ? setD(() => days++) : null, icon: const Icon(Icons.add_circle_outline)),
-            ]),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              FilledButton(onPressed: () {
-                setState(() => _planDurationDays = days);
-                Navigator.pop(ctx);
-              }, child: const Text('OK')),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Custom Duration'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            suffixText: 'days',
+            hintText: 'e.g. 45',
+            border: OutlineInputBorder(),
           ),
-        );
-      },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(onPressed: () {
+            final d = int.tryParse(ctrl.text);
+            if (d != null && d >= 1 && d <= 180) {
+              setState(() => _planDurationDays = d);
+            }
+            Navigator.pop(ctx);
+          }, child: const Text('OK')),
+        ],
+      ),
     );
   }
 
