@@ -294,11 +294,17 @@ class AppDatabase {
   Future<Map<String, dynamic>?> getNutritionPlan(String userId) async {
     final data = await _storage.read(key: _key(userId, 'nutrition_plan'));
     if (data == null) return null;
-    return jsonDecode(data) as Map<String, dynamic>;
+    final decoded = jsonDecode(data) as Map<String, dynamic>;
+    if (decoded.isEmpty) return null;
+    return decoded;
   }
 
   Future<void> saveNutritionPlan(String userId, Map<String, dynamic> plan) async {
     await _storage.write(key: _key(userId, 'nutrition_plan'), value: jsonEncode(plan));
+  }
+
+  Future<void> deleteNutritionPlan(String userId) async {
+    await _storage.delete(key: _key(userId, 'nutrition_plan'));
   }
 
   // ---- Body Measurements ----

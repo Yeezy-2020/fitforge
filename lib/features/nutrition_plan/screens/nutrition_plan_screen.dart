@@ -90,7 +90,11 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
   @override
   Widget build(BuildContext context) {
     final l10n = ref.watch(l10nProvider);
-    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final profileAsync = ref.watch(userProfileProvider);
+    final profile = profileAsync.valueOrNull;
+    if (profileAsync.isLoading) {
+      return Scaffold(appBar: AppBar(title: Text(l10n.get('nutritionPlan'))), body: const Center(child: CircularProgressIndicator()));
+    }
     if (profile == null) {
       return Scaffold(appBar: AppBar(title: Text(l10n.get('nutritionPlan'))), body: Center(child: Text(l10n.get('setupBodyFirst'))));
     }
@@ -637,7 +641,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
           FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () async {
             Navigator.pop(ctx);
             final userId = ref.read(currentUserIdProvider);
-            await AppDatabase.instance.saveNutritionPlan(userId, {}); // clear saved
+            await AppDatabase.instance.deleteNutritionPlan(userId);
             ref.read(nutritionCycleProvider.notifier).state = null;
             ref.read(nutritionStartDateProvider.notifier).state = null;
             setState(() { _step = 0; _goal = null; _planType = null; _activityFactor = 1.55; _planDurationDays = null; });
