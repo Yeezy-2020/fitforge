@@ -19,8 +19,9 @@ class DietLogScreen extends ConsumerStatefulWidget {
   ConsumerState<DietLogScreen> createState() => _DietLogScreenState();
 }
 
-class _DietLogScreenState extends ConsumerState<DietLogScreen> {
+class _DietLogScreenState extends ConsumerState<DietLogScreen> with AutomaticKeepAliveClientMixin {
   @override
+  bool get wantKeepAlive => true;  @override
   void initState() {
     super.initState();
     _loadCurrentDate();
@@ -110,6 +111,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final l10n = ref.watch(l10nProvider);
     final selectedDate = ref.watch(selectedDateProvider);
     final cache = ref.watch(dietCacheProvider);
@@ -412,6 +414,7 @@ class _DietLogList extends ConsumerWidget {
             final updated = DietLog(id: log.id, userId: log.userId, foodId: log.foodId, date: log.date, mealType: log.mealType, grams: newGrams, calories: newCalories, createdAt: log.createdAt);
             await AppDatabase.instance.deleteDietLog(ref.read(currentUserIdProvider), log.id);
             await AppDatabase.instance.addDietLog(ref.read(currentUserIdProvider), updated);
+            try { await ref.read(supabaseProvider).deleteDietLog(log.id); } catch (_) {}
             try { await ref.read(supabaseProvider).addDietLog(updated); } catch (_) {}
             ref.read(dietCacheProvider.notifier).updateLog(updated);
             if (ctx.mounted) Navigator.pop(ctx);

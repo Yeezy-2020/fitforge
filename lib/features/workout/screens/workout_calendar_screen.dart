@@ -246,6 +246,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen> with AutomaticKeepAliv
           final up = WorkoutLog(id: log.id, userId: log.userId, exerciseId: log.exerciseId, date: log.date, sets: ns, reps: nr, weightKg: nw, createdAt: log.createdAt);
           await AppDatabase.instance.deleteWorkoutLog(ref.read(currentUserIdProvider), log.id);
           await AppDatabase.instance.addWorkoutLog(ref.read(currentUserIdProvider), up);
+          try { ref.read(supabaseProvider).deleteWorkoutLog(log.id); } catch (_) {}
           try { ref.read(supabaseProvider).addWorkoutLog(up); } catch (_) {}
           ref.read(workoutLogCacheProvider.notifier).loadDate(log.date);
           Navigator.pop(ctx);
