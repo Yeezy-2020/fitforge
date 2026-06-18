@@ -13,7 +13,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   int _selectedPlan = 1; // 0 = monthly, 1 = annual (default)
 
   void _handleSubscribe() {
-    ref.read(isProProvider.notifier).state = true;
+    ref.read(isProProvider.notifier).setPro(true);
     context.pop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('订阅成功！(演示模式)')),

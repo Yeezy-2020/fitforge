@@ -8,7 +8,6 @@ import 'package:fitforge/features/nutrition_plan/screens/nutrition_plan_screen.d
 import 'package:fitforge/providers/app_providers.dart';
 import 'package:fitforge/providers/settings_providers.dart';
 import 'package:fitforge/core/localization/l10n.dart';
-import '../test_helpers.dart';
 
 void main() {
   final male = UserProfile(id: 't', gender: Gender.male, age: 30, heightCm: 180, weightKg: 80, goal: FitnessGoal.buildMuscle);

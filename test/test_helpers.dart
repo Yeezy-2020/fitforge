@@ -41,7 +41,11 @@ Widget testApp({
   return ProviderScope(
     overrides: [
       localeProvider.overrideWith((ref) => locale),
-      isProProvider.overrideWith((ref) => isPro),
+      isProProvider.overrideWith((ref) {
+        final n = IsProNotifier();
+        n.state = isPro;
+        return n;
+      }),
       currentUserIdProvider.overrideWith((ref) => 'test'),
     ],
     child: MaterialApp(
