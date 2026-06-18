@@ -59,7 +59,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen> with Single
   Future<void> _loadSavedPlan() async {
     final userId = ref.read(currentUserIdProvider);
     final saved = await AppDatabase.instance.getNutritionPlan(userId);
-    if (saved != null && mounted) {
+    if (saved != null && saved.isNotEmpty && mounted) {
       setState(() {
         _step = 4; // Skip to dashboard
         _goal = saved['goal'] as String?;
