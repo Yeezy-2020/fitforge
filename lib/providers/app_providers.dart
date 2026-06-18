@@ -48,19 +48,15 @@ final dietDatesProvider = StateNotifierProvider<DietDatesNotifier, Set<String>>(
 
 final isProProvider = StateNotifierProvider<IsProNotifier, bool>((ref) {
   final n = IsProNotifier();
-  n._init();
+  n.load();
+  ref.listen(currentUserIdProvider, (_, __) => n.load());
   return n;
 });
 
 class IsProNotifier extends StateNotifier<bool> {
   IsProNotifier() : super(false);
 
-  void _init() {
-    _load();
-    Supabase.instance.client.auth.onAuthStateChange.listen((_) => _load());
-  }
-
-  Future<void> _load() async {
+  Future<void> load() async {
     final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
     if (uid.isNotEmpty) {
       state = await AppDatabase.instance.getSubscriptionStatus(uid);
