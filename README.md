@@ -133,6 +133,28 @@ bash scripts/pre_push.sh
 
 执行流程：`flutter analyze` → `flutter test` → widget dump → dead button scan
 
+### 新功能测试要求
+
+**添加新功能时必须同步编写测试**，不允许仅靠线上手动验证。测试金字塔：
+
+| 层级 | 要求 | 示例 |
+|------|------|------|
+| 单元测试 | 新模型/公式/序列化逻辑 | `planDurationDays` 序列化、BMR 公式 |
+| Widget 测试 | 新页面可渲染、无死按钮 | screen 编译不抛异常、`onPressed` 非空 |
+| 交互测试 | 核心流程步骤可推进 | onboarding 步骤数、预设值边界 |
+
+测试文件位置：
+- 模型逻辑 → `test/features/all_features_test.dart`
+- 页面/交互 → `test/screens/<模块>_test.dart`
+
+```bash
+# 全量测试（CI 必过）
+flutter test
+
+# 新功能专项测试
+flutter test test/screens/nutrition_test.dart
+```
+
 ## 部署
 
 `main` 分支推送后 GitHub Actions 自动构建并部署到 GitHub Pages：
