@@ -147,6 +147,15 @@ bash scripts/pre_push.sh
 |------|------|
 | test@fitforge.com | 123456 |
 
+## 部署后验证
+
+每次 `git push` 后**必须**到线上环境验证改动：
+
+1. GitHub Actions 构建完成（约 2-3 分钟）
+2. 访问 [https://yeezy-2020.github.io/fitforge](https://yeezy-2020.github.io/fitforge)
+3. 使用测试账号登录，逐项检查改动功能
+4. 有问题截图提 GitHub Issue
+
 ## 营养公式参考
 
 | 方案 | 公式来源 | 说明 |
