@@ -24,8 +24,7 @@ class SyncService {
     final userId = _supabase.userId!;
 
     try {
-      final remoteWorkouts =
-          await _supabase.getWorkoutLogsForMonth(now);
+      final remoteWorkouts = await _supabase.getWorkoutLogsForMonth(now);
       final remoteDiets = await _supabase.getDietLogs(now);
 
       if (remoteWorkouts.isNotEmpty) {
@@ -42,14 +41,42 @@ class SyncService {
     if (_supabase.userId == null) return;
 
     final userId = _supabase.userId!;
-    final unsynced =
-        await _local.getUnsyncedWorkoutLogs(userId);
-    for (final log in unsynced) {
+
+    final syncedWorkoutDeletes = <String>{};
+    for (final id in await _local.getPendingWorkoutDeletes(userId)) {
       try {
-        await _supabase.addWorkoutLog(log);
+        await _supabase.deleteWorkoutLog(id);
+        syncedWorkoutDeletes.add(id);
       } catch (_) {}
     }
-    await _local.clearUnsyncedWorkouts(userId);
+    await _local.removePendingWorkoutDeletes(userId, syncedWorkoutDeletes);
+
+    final syncedDietDeletes = <String>{};
+    for (final id in await _local.getPendingDietDeletes(userId)) {
+      try {
+        await _supabase.deleteDietLog(id);
+        syncedDietDeletes.add(id);
+      } catch (_) {}
+    }
+    await _local.removePendingDietDeletes(userId, syncedDietDeletes);
+
+    final syncedWorkouts = <String>{};
+    for (final log in await _local.getUnsyncedWorkoutLogs(userId)) {
+      try {
+        await _supabase.addWorkoutLog(log);
+        syncedWorkouts.add(log.id);
+      } catch (_) {}
+    }
+    await _local.removeUnsyncedWorkoutLogs(userId, syncedWorkouts);
+
+    final syncedDiets = <String>{};
+    for (final log in await _local.getUnsyncedDietLogs(userId)) {
+      try {
+        await _supabase.addDietLog(log);
+        syncedDiets.add(log.id);
+      } catch (_) {}
+    }
+    await _local.removeUnsyncedDietLogs(userId, syncedDiets);
   }
 
   /// Full two-way sync.

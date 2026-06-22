@@ -12,7 +12,6 @@ class SupabaseService {
 
   String? get userId => _client.auth.currentUser?.id;
 
-
   Food _foodFromRow(Map<String, dynamic> r) => Food(
     id: r['id'] as String,
     name: r['name'] as String,
@@ -24,6 +23,7 @@ class SupabaseService {
   );
 
   Map<String, dynamic> _workoutToRow(WorkoutLog w) => {
+    'id': w.id,
     'user_id': userId,
     'exercise_id': w.exerciseId,
     'date': w.date.toIso8601String().substring(0, 10),
@@ -42,13 +42,13 @@ class SupabaseService {
     reps: r['reps'] as int,
     weightKg: (r['weight_kg'] as num).toDouble(),
     note: r['note'] as String?,
-    createdAt:
-        r['created_at'] != null
-            ? DateTime.parse(r['created_at'] as String)
-            : null,
+    createdAt: r['created_at'] != null
+        ? DateTime.parse(r['created_at'] as String)
+        : null,
   );
 
   Map<String, dynamic> _dietToRow(DietLog d) => {
+    'id': d.id,
     'user_id': userId,
     'food_id': d.foodId,
     'date': d.date.toIso8601String().substring(0, 10),
@@ -68,10 +68,9 @@ class SupabaseService {
     ),
     grams: (r['grams'] as num).toDouble(),
     calories: (r['calories'] as num).toDouble(),
-    createdAt:
-        r['created_at'] != null
-            ? DateTime.parse(r['created_at'] as String)
-            : null,
+    createdAt: r['created_at'] != null
+        ? DateTime.parse(r['created_at'] as String)
+        : null,
   );
 
   UserProfile _profileFromRow(Map<String, dynamic> r) => UserProfile(
@@ -88,10 +87,9 @@ class SupabaseService {
       (e) => e.name == r['goal'],
       orElse: () => FitnessGoal.maintain,
     ),
-    bodyFatPct:
-        r['body_fat_pct'] != null
-            ? (r['body_fat_pct'] as num).toDouble()
-            : null,
+    bodyFatPct: r['body_fat_pct'] != null
+        ? (r['body_fat_pct'] as num).toDouble()
+        : null,
     displayName: r['display_name'] as String?,
   );
 
@@ -121,11 +119,7 @@ class SupabaseService {
   Future<UserProfile?> getProfile() async {
     final uid = userId;
     if (uid == null) return null;
-    final data = await _client
-        .from('profiles')
-        .select()
-        .eq('id', uid)
-        .single();
+    final data = await _client.from('profiles').select().eq('id', uid).single();
     return _profileFromRow(data);
   }
 
@@ -192,7 +186,7 @@ class SupabaseService {
   }
 
   Future<void> addWorkoutLog(WorkoutLog log) async {
-    await _client.from('workout_logs').insert(_workoutToRow(log));
+    await _client.from('workout_logs').upsert(_workoutToRow(log));
   }
 
   Future<void> deleteWorkoutLog(String logId) async {
@@ -213,7 +207,7 @@ class SupabaseService {
   }
 
   Future<void> addDietLog(DietLog log) async {
-    await _client.from('diet_logs').insert(_dietToRow(log));
+    await _client.from('diet_logs').upsert(_dietToRow(log));
   }
 
   Future<void> deleteDietLog(String logId) async {

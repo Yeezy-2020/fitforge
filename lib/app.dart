@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/home/home_shell.dart';
@@ -17,8 +20,19 @@ import 'providers/settings_providers.dart';
 import 'core/localization/l10n.dart';
 
 final _routerProvider = Provider<GoRouter>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: userId.isEmpty ? '/login' : '/home',
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+      final isLogin = location == '/login';
+      final isOnboarding = location == '/onboarding';
+
+      if (userId.isEmpty && !isLogin) return '/login';
+      if (userId.isNotEmpty && isLogin) return '/home';
+      if (userId.isEmpty && isOnboarding) return '/login';
+      return null;
+    },
     routes: [
       GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
       GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingScreen()),
@@ -26,9 +40,18 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile', builder: (c, s) => const ProfileScreen()),
       GoRoute(path: '/settings', builder: (c, s) => const SettingsScreen()),
       GoRoute(path: '/body', builder: (c, s) => const BodyScreen()),
-      GoRoute(path: '/home', builder: (c, s) => const HomeShell(child: SizedBox.shrink()), routes: [
-        GoRoute(path: 'day/:date', builder: (c, s) => WorkoutDayScreen(date: DateTime.parse(s.pathParameters['date']!))),
-      ]),
+      GoRoute(
+        path: '/home',
+        builder: (c, s) => const HomeShell(child: SizedBox.shrink()),
+        routes: [
+          GoRoute(
+            path: 'day/:date',
+            builder: (c, s) => WorkoutDayScreen(
+              date: DateTime.parse(s.pathParameters['date']!),
+            ),
+          ),
+        ],
+      ),
     ],
   );
 });
@@ -39,11 +62,33 @@ class FitForgeApp extends ConsumerStatefulWidget {
   ConsumerState<FitForgeApp> createState() => _FitForgeAppState();
 }
 
-class _FitForgeAppState extends ConsumerState<FitForgeApp> with WidgetsBindingObserver {
+class _FitForgeAppState extends ConsumerState<FitForgeApp>
+    with WidgetsBindingObserver {
+  StreamSubscription<AuthState>? _authSubscription;
+
   @override
-  void initState() { super.initState(); WidgetsBinding.instance.addObserver(this); }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
+      final userId = data.session?.user.id ?? '';
+      ref.read(currentUserIdProvider.notifier).state = userId;
+      if (userId.isNotEmpty) {
+        ref.read(workoutCacheProvider.notifier).loadAll();
+        ref.read(dietCacheProvider.notifier).loadDate(DateTime.now());
+      }
+    });
+  }
+
   @override
-  void dispose() { WidgetsBinding.instance.removeObserver(this); super.dispose(); }
+  void dispose() {
+    _authSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -52,16 +97,26 @@ class _FitForgeAppState extends ConsumerState<FitForgeApp> with WidgetsBindingOb
       ref.read(dietCacheProvider.notifier).loadDate(DateTime.now());
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(_routerProvider);
     final appLocale = ref.watch(localeProvider);
     return MaterialApp.router(
-      title: 'FitForge', debugShowCheckedModeBanner: false,
-      theme: AppTheme.light, darkTheme: AppTheme.dark, themeMode: ThemeMode.system,
+      title: 'FitForge',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       routerConfig: router,
-      locale: appLocale == AppLocale.zh ? const Locale('zh', 'CN') : const Locale('en', 'US'),
-      localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
+      locale: appLocale == AppLocale.zh
+          ? const Locale('zh', 'CN')
+          : const Locale('en', 'US'),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
     );
   }

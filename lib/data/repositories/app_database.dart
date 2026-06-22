@@ -39,10 +39,7 @@ class AppDatabase {
     await saveExercises(userId, exercises);
   }
 
-  Future<List<WorkoutLog>> getWorkoutLogs(
-    String userId,
-    DateTime date,
-  ) async {
+  Future<List<WorkoutLog>> getWorkoutLogs(String userId, DateTime date) async {
     final data = await _storage.read(key: _key(userId, 'workout_logs'));
     if (data == null) return [];
     final dateStr = _dateStr(date);
@@ -68,12 +65,11 @@ class AppDatabase {
 
   Future<void> addWorkoutLog(String userId, WorkoutLog log) async {
     final data = await _storage.read(key: _key(userId, 'workout_logs'));
-    final logs =
-        data != null
-            ? (jsonDecode(data) as List)
-                .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
-                .toList()
-            : <WorkoutLog>[];
+    final logs = data != null
+        ? (jsonDecode(data) as List)
+              .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : <WorkoutLog>[];
     logs.add(log);
     await _storage.write(
       key: _key(userId, 'workout_logs'),
@@ -84,10 +80,9 @@ class AppDatabase {
   Future<void> deleteWorkoutLog(String userId, String logId) async {
     final data = await _storage.read(key: _key(userId, 'workout_logs'));
     if (data == null) return;
-    final logs =
-        (jsonDecode(data) as List)
-            .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
-            .toList();
+    final logs = (jsonDecode(data) as List)
+        .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
+        .toList();
     logs.removeWhere((l) => l.id == logId);
     await _storage.write(
       key: _key(userId, 'workout_logs'),
@@ -107,12 +102,11 @@ class AppDatabase {
 
   Future<void> addDietLog(String userId, DietLog log) async {
     final data = await _storage.read(key: _key(userId, 'diet_logs'));
-    final logs =
-        data != null
-            ? (jsonDecode(data) as List)
-                .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
-                .toList()
-            : <DietLog>[];
+    final logs = data != null
+        ? (jsonDecode(data) as List)
+              .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : <DietLog>[];
     logs.add(log);
     await _storage.write(
       key: _key(userId, 'diet_logs'),
@@ -123,10 +117,9 @@ class AppDatabase {
   Future<void> deleteDietLog(String userId, String logId) async {
     final data = await _storage.read(key: _key(userId, 'diet_logs'));
     if (data == null) return;
-    final logs =
-        (jsonDecode(data) as List)
-            .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
-            .toList();
+    final logs = (jsonDecode(data) as List)
+        .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
+        .toList();
     logs.removeWhere((l) => l.id == logId);
     await _storage.write(
       key: _key(userId, 'diet_logs'),
@@ -170,22 +163,18 @@ class AppDatabase {
   }
 
   Future<void> setSubscriptionStatus(String userId, bool isPro) async {
-    await _storage.write(
-      key: _key(userId, 'is_pro'),
-      value: isPro.toString(),
-    );
+    await _storage.write(key: _key(userId, 'is_pro'), value: isPro.toString());
   }
 
   // ---- Sync ----
 
   Future<void> saveWorkoutLogs(String userId, List<WorkoutLog> logs) async {
     final data = await _storage.read(key: _key(userId, 'workout_logs'));
-    final existing =
-        data != null
-            ? (jsonDecode(data) as List)
-                .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
-                .toList()
-            : <WorkoutLog>[];
+    final existing = data != null
+        ? (jsonDecode(data) as List)
+              .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : <WorkoutLog>[];
     final existingIds = existing.map((l) => l.id).toSet();
     for (final log in logs) {
       if (!existingIds.contains(log.id)) {
@@ -200,12 +189,11 @@ class AppDatabase {
 
   Future<void> saveDietLogs(String userId, List<DietLog> logs) async {
     final data = await _storage.read(key: _key(userId, 'diet_logs'));
-    final existing =
-        data != null
-            ? (jsonDecode(data) as List)
-                .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
-                .toList()
-            : <DietLog>[];
+    final existing = data != null
+        ? (jsonDecode(data) as List)
+              .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : <DietLog>[];
     final existingIds = existing.map((l) => l.id).toSet();
     for (final log in logs) {
       if (!existingIds.contains(log.id)) {
@@ -239,31 +227,102 @@ class AppDatabase {
     await _storage.delete(key: _key(userId, 'unsynced_workouts'));
   }
 
+  Future<void> removeUnsyncedWorkoutLogs(String userId, Set<String> ids) async {
+    if (ids.isEmpty) return;
+    final unsynced = await getUnsyncedWorkoutLogs(userId);
+    unsynced.removeWhere((log) => ids.contains(log.id));
+    await _storage.write(
+      key: _key(userId, 'unsynced_workouts'),
+      value: jsonEncode(unsynced.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<List<DietLog>> getUnsyncedDietLogs(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'unsynced_diets'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List)
+        .map((e) => DietLog.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> addUnsyncedDiet(String userId, DietLog log) async {
+    final unsynced = await getUnsyncedDietLogs(userId);
+    final idx = unsynced.indexWhere((item) => item.id == log.id);
+    if (idx >= 0) {
+      unsynced[idx] = log;
+    } else {
+      unsynced.add(log);
+    }
+    await _storage.write(
+      key: _key(userId, 'unsynced_diets'),
+      value: jsonEncode(unsynced.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<void> removeUnsyncedDietLogs(String userId, Set<String> ids) async {
+    if (ids.isEmpty) return;
+    final unsynced = await getUnsyncedDietLogs(userId);
+    unsynced.removeWhere((log) => ids.contains(log.id));
+    await _storage.write(
+      key: _key(userId, 'unsynced_diets'),
+      value: jsonEncode(unsynced.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<List<String>> getPendingWorkoutDeletes(String userId) =>
+      _getStringList(userId, 'pending_workout_deletes');
+
+  Future<void> addPendingWorkoutDelete(String userId, String id) =>
+      _addString(userId, 'pending_workout_deletes', id);
+
+  Future<void> removePendingWorkoutDeletes(String userId, Set<String> ids) =>
+      _removeStrings(userId, 'pending_workout_deletes', ids);
+
+  Future<List<String>> getPendingDietDeletes(String userId) =>
+      _getStringList(userId, 'pending_diet_deletes');
+
+  Future<void> addPendingDietDelete(String userId, String id) =>
+      _addString(userId, 'pending_diet_deletes', id);
+
+  Future<void> removePendingDietDeletes(String userId, Set<String> ids) =>
+      _removeStrings(userId, 'pending_diet_deletes', ids);
+
   Future<String?> getLastSyncTime(String userId) async {
     return _storage.read(key: _key(userId, 'last_sync'));
   }
 
   Future<void> setLastSyncTime(String userId) async {
-    await _storage.write(key: _key(userId, 'last_sync'), value: DateTime.now().toIso8601String());
+    await _storage.write(
+      key: _key(userId, 'last_sync'),
+      value: DateTime.now().toIso8601String(),
+    );
   }
 
   // ---- Templates ----
   Future<List<WorkoutTemplate>> getTemplates(String userId) async {
     final data = await _storage.read(key: _key(userId, 'templates'));
     if (data == null) return [];
-    return (jsonDecode(data) as List).map((e) => WorkoutTemplate.fromJson(e)).toList();
+    return (jsonDecode(data) as List)
+        .map((e) => WorkoutTemplate.fromJson(e))
+        .toList();
   }
 
   Future<void> saveTemplate(String userId, WorkoutTemplate template) async {
     final templates = await getTemplates(userId);
     templates.add(template);
-    await _storage.write(key: _key(userId, 'templates'), value: jsonEncode(templates.map((t) => t.toJson()).toList()));
+    await _storage.write(
+      key: _key(userId, 'templates'),
+      value: jsonEncode(templates.map((t) => t.toJson()).toList()),
+    );
   }
 
   Future<void> deleteTemplate(String userId, String templateId) async {
     final templates = await getTemplates(userId);
     templates.removeWhere((t) => t.id == templateId);
-    await _storage.write(key: _key(userId, 'templates'), value: jsonEncode(templates.map((t) => t.toJson()).toList()));
+    await _storage.write(
+      key: _key(userId, 'templates'),
+      value: jsonEncode(templates.map((t) => t.toJson()).toList()),
+    );
   }
 
   // ---- Meal Templates ----
@@ -277,7 +336,10 @@ class AppDatabase {
     final templates = await _storage.read(key: _key(userId, 'meal_templates'));
     final list = templates != null ? (jsonDecode(templates) as List) : [];
     list.add({'name': name, 'data': data});
-    await _storage.write(key: _key(userId, 'meal_templates'), value: jsonEncode(list));
+    await _storage.write(
+      key: _key(userId, 'meal_templates'),
+      value: jsonEncode(list),
+    );
   }
 
   Future<String?> getMealTemplateData(String userId, String name) async {
@@ -299,8 +361,14 @@ class AppDatabase {
     return decoded;
   }
 
-  Future<void> saveNutritionPlan(String userId, Map<String, dynamic> plan) async {
-    await _storage.write(key: _key(userId, 'nutrition_plan'), value: jsonEncode(plan));
+  Future<void> saveNutritionPlan(
+    String userId,
+    Map<String, dynamic> plan,
+  ) async {
+    await _storage.write(
+      key: _key(userId, 'nutrition_plan'),
+      value: jsonEncode(plan),
+    );
   }
 
   Future<void> deleteNutritionPlan(String userId) async {
@@ -311,19 +379,27 @@ class AppDatabase {
   Future<List<BodyMeasurement>> getBodyMeasurements(String userId) async {
     final data = await _storage.read(key: _key(userId, 'body_measurements'));
     if (data == null) return [];
-    return (jsonDecode(data) as List).map((e) => BodyMeasurement.fromJson(e as Map<String, dynamic>)).toList();
+    return (jsonDecode(data) as List)
+        .map((e) => BodyMeasurement.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> saveBodyMeasurement(String userId, BodyMeasurement entry) async {
     final entries = await getBodyMeasurements(userId);
     entries.insert(0, entry);
-    await _storage.write(key: _key(userId, 'body_measurements'), value: jsonEncode(entries.map((e) => e.toJson()).toList()));
+    await _storage.write(
+      key: _key(userId, 'body_measurements'),
+      value: jsonEncode(entries.map((e) => e.toJson()).toList()),
+    );
   }
 
   Future<void> deleteBodyMeasurement(String userId, String id) async {
     final entries = await getBodyMeasurements(userId);
     entries.removeWhere((e) => e.id == id);
-    await _storage.write(key: _key(userId, 'body_measurements'), value: jsonEncode(entries.map((e) => e.toJson()).toList()));
+    await _storage.write(
+      key: _key(userId, 'body_measurements'),
+      value: jsonEncode(entries.map((e) => e.toJson()).toList()),
+    );
   }
 
   String _dateStr(DateTime d) =>
@@ -331,6 +407,36 @@ class AppDatabase {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
+  Future<List<String>> _getStringList(String userId, String type) async {
+    final data = await _storage.read(key: _key(userId, type));
+    if (data == null) return [];
+    return (jsonDecode(data) as List).map((e) => e.toString()).toList();
+  }
+
+  Future<void> _saveStringList(
+    String userId,
+    String type,
+    List<String> values,
+  ) async {
+    await _storage.write(key: _key(userId, type), value: jsonEncode(values));
+  }
+
+  Future<void> _addString(String userId, String type, String value) async {
+    final values = await _getStringList(userId, type);
+    if (!values.contains(value)) values.add(value);
+    await _saveStringList(userId, type, values);
+  }
+
+  Future<void> _removeStrings(
+    String userId,
+    String type,
+    Set<String> valuesToRemove,
+  ) async {
+    if (valuesToRemove.isEmpty) return;
+    final values = await _getStringList(userId, type);
+    values.removeWhere(valuesToRemove.contains);
+    await _saveStringList(userId, type, values);
+  }
 
   List<Food> _defaultFoods() => [
     Food(

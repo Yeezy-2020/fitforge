@@ -3,7 +3,8 @@ set -e
 export PATH="/opt/flutter/bin:$PATH"
 
 echo "=== 1. flutter analyze ==="
-flutter analyze 2>&1 | grep -q " error •" && { echo "FAILED"; exit 1; } || echo "PASS"
+flutter analyze --no-fatal-infos --no-fatal-warnings
+echo "PASS"
 
 echo "=== 2. flutter test ==="
 flutter test 2>&1 | grep -q "All tests passed" && echo "PASS" || { echo "FAILED"; exit 1; }

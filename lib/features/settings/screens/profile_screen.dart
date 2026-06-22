@@ -31,7 +31,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _ageCtrl = TextEditingController(text: p?.age.toString() ?? '');
     _heightCtrl = TextEditingController(text: p?.heightCm.toString() ?? '');
     _weightCtrl = TextEditingController(text: p?.weightKg.toString() ?? '');
-    _bodyFatCtrl = TextEditingController(text: p?.bodyFatPct?.toStringAsFixed(1) ?? '');
+    _bodyFatCtrl = TextEditingController(
+      text: p?.bodyFatPct?.toStringAsFixed(1) ?? '',
+    );
   }
 
   @override
@@ -68,13 +70,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         title: const Text('Log Out'),
         content: const Text('Are you sure you want to log out?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log Out')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log Out'),
+          ),
         ],
       ),
     );
     if (confirm == true) {
       await Supabase.instance.client.auth.signOut();
+      ref.read(currentUserIdProvider.notifier).state = '';
       if (mounted) context.go('/login');
     }
   }
@@ -84,20 +93,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Account'),
-        content: const Text('This action is irreversible. All your data will be permanently deleted.'),
+        content: const Text(
+          'Account deletion requires a server-side flow and is not available in this development build yet.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: const Text('OK'),
           ),
         ],
       ),
     );
     if (confirm == true) {
-      await Supabase.instance.client.auth.signOut();
-      if (mounted) context.go('/login');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account deletion is not available yet')),
+      );
     }
   }
 
@@ -121,10 +137,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onPressed: () => setState(() => _editing = true),
             )
           else
-            TextButton(
-              onPressed: _save,
-              child: Text(l10n.get('save')),
-            ),
+            TextButton(onPressed: _save, child: Text(l10n.get('save'))),
         ],
       ),
       body: profileAsync.when(
@@ -152,14 +165,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                    Text(
-                      profile.email ?? 'No email',
-                      style: theme.textTheme.titleMedium,
+                      Text(
+                        profile.email ?? 'No email',
+                        style: theme.textTheme.titleMedium,
                       ),
                       if (profile.displayName != null)
                         Text(
                           profile.displayName!,
-                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.grey,
+                          ),
                         ),
                     ],
                   ),
@@ -179,13 +194,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (_editing) ...[
                         _buildEditFields(theme),
                       ] else ...[
-                        _buildReadRow('Gender', profile.gender == Gender.male ? 'Male' : 'Female'),
+                        _buildReadRow(
+                          'Gender',
+                          profile.gender == Gender.male ? 'Male' : 'Female',
+                        ),
                         _buildReadRow('Age', '${profile.age} yrs'),
-                        _buildReadRow('Height', '${profile.heightCm.toStringAsFixed(0)} cm'),
-                        _buildReadRow('Weight', '${profile.weightKg.toStringAsFixed(1)} kg'),
+                        _buildReadRow(
+                          'Height',
+                          '${profile.heightCm.toStringAsFixed(0)} cm',
+                        ),
+                        _buildReadRow(
+                          'Weight',
+                          '${profile.weightKg.toStringAsFixed(1)} kg',
+                        ),
                         _buildReadRow('Goal', _goalLabel(profile.goal)),
                         if (profile.bodyFatPct != null)
-                          _buildReadRow('Body Fat', '${profile.bodyFatPct!.toStringAsFixed(1)}%'),
+                          _buildReadRow(
+                            'Body Fat',
+                            '${profile.bodyFatPct!.toStringAsFixed(1)}%',
+                          ),
                       ],
                     ],
                   ),
@@ -270,7 +297,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+          ),
           Text(value, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
@@ -292,25 +324,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         TextField(
           controller: _ageCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Age', suffixText: 'yrs', isDense: true),
+          decoration: const InputDecoration(
+            labelText: 'Age',
+            suffixText: 'yrs',
+            isDense: true,
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _heightCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Height', suffixText: 'cm', isDense: true),
+          decoration: const InputDecoration(
+            labelText: 'Height',
+            suffixText: 'cm',
+            isDense: true,
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _weightCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Weight', suffixText: 'kg', isDense: true),
+          decoration: const InputDecoration(
+            labelText: 'Weight',
+            suffixText: 'kg',
+            isDense: true,
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _bodyFatCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Body Fat', suffixText: '%', isDense: true),
+          decoration: const InputDecoration(
+            labelText: 'Body Fat',
+            suffixText: '%',
+            isDense: true,
+          ),
         ),
         const SizedBox(height: 12),
         SegmentedButton<FitnessGoal>(
@@ -328,9 +376,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   String _goalLabel(FitnessGoal g) {
     switch (g) {
-      case FitnessGoal.loseFat: return 'Cut';
-      case FitnessGoal.buildMuscle: return 'Bulk';
-      case FitnessGoal.maintain: return 'Maintain';
+      case FitnessGoal.loseFat:
+        return 'Cut';
+      case FitnessGoal.buildMuscle:
+        return 'Bulk';
+      case FitnessGoal.maintain:
+        return 'Maintain';
     }
   }
 }
