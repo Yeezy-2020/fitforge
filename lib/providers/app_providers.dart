@@ -5,12 +5,18 @@ import '../data/models/workout_log.dart';
 import '../data/models/food.dart';
 import '../data/models/diet_log.dart';
 import '../data/models/user_profile.dart';
+import '../data/models/progression_rule.dart';
 import '../data/repositories/app_database.dart';
 import '../core/services/supabase_service.dart';
 import '../core/utils/nutrition_calculator.dart';
+import '../core/utils/progression_calculator.dart';
 
-final appDatabaseProvider = Provider<AppDatabase>((ref) => AppDatabase.instance);
-final supabaseProvider = Provider<SupabaseService>((ref) => SupabaseService.instance);
+final appDatabaseProvider = Provider<AppDatabase>(
+  (ref) => AppDatabase.instance,
+);
+final supabaseProvider = Provider<SupabaseService>(
+  (ref) => SupabaseService.instance,
+);
 
 final selectedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
 
@@ -29,15 +35,21 @@ class DietDatesNotifier extends StateNotifier<Set<String>> {
   final SupabaseService _supabase;
   DietDatesNotifier(this._supabase) : super({});
 
-  String _k(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _k(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  void addDate(DateTime d) { state = {...state, _k(d)}; }
+  void addDate(DateTime d) {
+    state = {...state, _k(d)};
+  }
+
   void loadMonth(int year, int month) async {
     try {
       final firstDay = DateTime(year, month, 1);
-      
+
       final logs = await _supabase.getDietLogs(firstDay);
-      for (final log in logs) { state = {...state, _k(log.date)}; }
+      for (final log in logs) {
+        state = {...state, _k(log.date)};
+      }
     } catch (_) {}
   }
 }
@@ -109,16 +121,12 @@ class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
 }
 
 // ===== Nutrition =====
-final nutritionPlanProvider = Provider<({
-  double tdee,
-  double protein,
-  double carbs,
-  double fat,
-})?>((ref) {
-  final profile = ref.watch(userProfileProvider).valueOrNull;
-  if (profile == null) return null;
-  return const NutritionCalculator().calculateLegacy(profile);
-});
+final nutritionPlanProvider =
+    Provider<({double tdee, double protein, double carbs, double fat})?>((ref) {
+      final profile = ref.watch(userProfileProvider).valueOrNull;
+      if (profile == null) return null;
+      return const NutritionCalculator().calculateLegacy(profile);
+    });
 
 // ===== Exercises =====
 final exerciseListProvider =
@@ -186,7 +194,9 @@ class WorkoutCacheNotifier extends StateNotifier<Map<String, Set<DateTime>>> {
   Future<void> loadMonth(DateTime month) async {
     try {
       final logs = await _supabase.getWorkoutLogsForMonth(month);
-      final dates = logs.map((l) => DateTime(l.date.year, l.date.month, l.date.day)).toSet();
+      final dates = logs
+          .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
+          .toSet();
       state = {...state, _key(month): dates};
     } catch (_) {}
   }
@@ -202,37 +212,123 @@ class WorkoutCacheNotifier extends StateNotifier<Map<String, Set<DateTime>>> {
 
 final workoutCacheProvider =
     StateNotifierProvider<WorkoutCacheNotifier, Map<String, Set<DateTime>>>(
-  (ref) => WorkoutCacheNotifier(ref.read(supabaseProvider)),
-);
+      (ref) => WorkoutCacheNotifier(ref.read(supabaseProvider)),
+    );
 
-class WorkoutLogCacheNotifier extends StateNotifier<Map<String, List<WorkoutLog>>> {
+class WorkoutLogCacheNotifier
+    extends StateNotifier<Map<String, List<WorkoutLog>>> {
   final SupabaseService _supabase;
   WorkoutLogCacheNotifier(this._supabase) : super({});
-  String _k(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _k(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   List<WorkoutLog> getLogs(DateTime d) => state[_k(d)] ?? [];
   Future<void> loadDate(DateTime d) async {
-    try { final logs = await _supabase.getWorkoutLogs(d); state = {...state, _k(d): logs}; } catch (_) {}
+    try {
+      final logs = await _supabase.getWorkoutLogs(d);
+      state = {...state, _k(d): logs};
+    } catch (_) {}
   }
+
   void addLogs(DateTime d, List<WorkoutLog> logs) {
-    final k = _k(d); final e = List<WorkoutLog>.from(state[k] ?? []); e.addAll(logs); state = {...state, k: e};
+    final k = _k(d);
+    final e = List<WorkoutLog>.from(state[k] ?? []);
+    e.addAll(logs);
+    state = {...state, k: e};
   }
 }
 
-final workoutLogCacheProvider = StateNotifierProvider<WorkoutLogCacheNotifier, Map<String, List<WorkoutLog>>>(
-  (ref) => WorkoutLogCacheNotifier(ref.read(supabaseProvider)),
-);
+final workoutLogCacheProvider =
+    StateNotifierProvider<
+      WorkoutLogCacheNotifier,
+      Map<String, List<WorkoutLog>>
+    >((ref) => WorkoutLogCacheNotifier(ref.read(supabaseProvider)));
 
 final workoutDatesForMonthProvider =
     FutureProvider.family<Set<DateTime>, DateTime>((ref, month) async {
       try {
         if (ref.read(isOnlineProvider)) {
-          final remote = await ref.read(supabaseProvider).getWorkoutLogsForMonth(month);
-          return remote.map((l) => DateTime(l.date.year, l.date.month, l.date.day)).toSet();
+          final remote = await ref
+              .read(supabaseProvider)
+              .getWorkoutLogsForMonth(month);
+          return remote
+              .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
+              .toSet();
         }
       } catch (_) {}
       final userId = ref.read(currentUserIdProvider);
-      final local = await AppDatabase.instance.getWorkoutLogsForMonth(userId, month);
-      return local.map((l) => DateTime(l.date.year, l.date.month, l.date.day)).toSet();
+      final local = await AppDatabase.instance.getWorkoutLogsForMonth(
+        userId,
+        month,
+      );
+      return local
+          .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
+          .toSet();
+    });
+
+// ===== Progression Rules =====
+final progressionRulesProvider =
+    AsyncNotifierProvider<ProgressionRulesNotifier, List<ProgressionRule>>(
+      ProgressionRulesNotifier.new,
+    );
+
+class ProgressionRulesNotifier extends AsyncNotifier<List<ProgressionRule>> {
+  @override
+  Future<List<ProgressionRule>> build() async {
+    final userId = ref.watch(currentUserIdProvider);
+    return AppDatabase.instance.getProgressionRules(userId);
+  }
+
+  Future<void> save(ProgressionRule rule) async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.saveProgressionRule(userId, rule);
+    state = AsyncData(await AppDatabase.instance.getProgressionRules(userId));
+  }
+
+  Future<void> delete(String exerciseId) async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.deleteProgressionRule(userId, exerciseId);
+    state = AsyncData(await AppDatabase.instance.getProgressionRules(userId));
+  }
+}
+
+final progressionRuleForExerciseProvider =
+    Provider.family<ProgressionRule?, String>((ref, exerciseId) {
+      final rules = ref.watch(progressionRulesProvider).valueOrNull ?? [];
+      return rules.where((r) => r.exerciseId == exerciseId).firstOrNull;
+    });
+
+final lastWorkoutLogForExerciseProvider =
+    FutureProvider.family<WorkoutLog?, ({String exerciseId, DateTime before})>((
+      ref,
+      args,
+    ) async {
+      final userId = ref.watch(currentUserIdProvider);
+      return AppDatabase.instance.getLastWorkoutLogForExercise(
+        userId,
+        args.exerciseId,
+        args.before,
+      );
+    });
+
+/// Computes a progression suggestion for an exercise based on its enabled
+/// rule and the most recent workout log before [before]. Returns null when no
+/// enabled rule exists for the exercise.
+final progressionSuggestionProvider =
+    Provider.family<
+      ProgressionSuggestion?,
+      ({String exerciseId, DateTime before})
+    >((ref, args) {
+      final rule = ref.watch(
+        progressionRuleForExerciseProvider(args.exerciseId),
+      );
+      if (rule == null || !rule.enabled) return null;
+      final lastLog = ref
+          .watch(lastWorkoutLogForExerciseProvider(args))
+          .valueOrNull;
+      return const ProgressionCalculator().calculate(
+        lastLog: lastLog,
+        rule: rule,
+      );
     });
 
 // ===== Diet Logs =====
@@ -241,7 +337,8 @@ class DietCacheNotifier extends StateNotifier<Map<String, List<DietLog>>> {
   final SupabaseService _supabase;
   DietCacheNotifier(this._supabase) : super({});
 
-  String _key(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _key(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   List<DietLog> getLogsForDate(DateTime date) => state[_key(date)] ?? [];
 
@@ -277,8 +374,8 @@ class DietCacheNotifier extends StateNotifier<Map<String, List<DietLog>>> {
 
 final dietCacheProvider =
     StateNotifierProvider<DietCacheNotifier, Map<String, List<DietLog>>>(
-  (ref) => DietCacheNotifier(ref.read(supabaseProvider)),
-);
+      (ref) => DietCacheNotifier(ref.read(supabaseProvider)),
+    );
 
 // ===== Foods =====
 final foodListProvider = AsyncNotifierProvider<FoodListNotifier, List<Food>>(
@@ -311,7 +408,8 @@ final searchFoodsProvider = Provider.family<List<Food>, String>((ref, query) {
 // ===== Daily Stats =====
 final dailyCaloriesProvider = Provider.family<double, DateTime>((ref, date) {
   final cache = ref.watch(dietCacheProvider);
-  final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  final dateKey =
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   final logs = cache[dateKey] ?? [];
   double total = 0;
   for (final log in logs) {
@@ -320,23 +418,25 @@ final dailyCaloriesProvider = Provider.family<double, DateTime>((ref, date) {
   return total;
 });
 
-final dailyMacrosProvider = Provider.family<
-  ({double protein, double carbs, double fat}),
-  DateTime
->((ref, date) {
-  final cache = ref.watch(dietCacheProvider);
-  final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  final logs = cache[dateKey] ?? [];
-  final foods = ref.read(foodListProvider).valueOrNull ?? [];
-  double protein = 0, carbs = 0, fat = 0;
-  for (final log in logs) {
-    final food = foods.where((f) => f.id == log.foodId).firstOrNull;
-    if (food != null) {
-      final factor = log.grams / 100;
-      protein += food.proteinPer100g * factor;
-      carbs += food.carbsPer100g * factor;
-      fat += food.fatPer100g * factor;
-    }
-  }
-  return (protein: protein, carbs: carbs, fat: fat);
-});
+final dailyMacrosProvider =
+    Provider.family<({double protein, double carbs, double fat}), DateTime>((
+      ref,
+      date,
+    ) {
+      final cache = ref.watch(dietCacheProvider);
+      final dateKey =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final logs = cache[dateKey] ?? [];
+      final foods = ref.read(foodListProvider).valueOrNull ?? [];
+      double protein = 0, carbs = 0, fat = 0;
+      for (final log in logs) {
+        final food = foods.where((f) => f.id == log.foodId).firstOrNull;
+        if (food != null) {
+          final factor = log.grams / 100;
+          protein += food.proteinPer100g * factor;
+          carbs += food.carbsPer100g * factor;
+          fat += food.fatPer100g * factor;
+        }
+      }
+      return (protein: protein, carbs: carbs, fat: fat);
+    });

@@ -7,6 +7,7 @@ import '../models/diet_log.dart';
 import '../models/user_profile.dart';
 import '../models/workout_template.dart';
 import '../models/body_measurement.dart';
+import '../models/progression_rule.dart';
 import 'exercise_library.dart';
 
 class AppDatabase {
@@ -87,6 +88,73 @@ class AppDatabase {
     await _storage.write(
       key: _key(userId, 'workout_logs'),
       value: jsonEncode(logs.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<List<WorkoutLog>> _getAllWorkoutLogs(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'workout_logs'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List)
+        .map((e) => WorkoutLog.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<WorkoutLog?> getLastWorkoutLogForExercise(
+    String userId,
+    String exerciseId,
+    DateTime beforeDate,
+  ) async {
+    final logs = await _getAllWorkoutLogs(userId);
+    final matches =
+        logs
+            .where(
+              (l) => l.exerciseId == exerciseId && l.date.isBefore(beforeDate),
+            )
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+    return matches.isNotEmpty ? matches.first : null;
+  }
+
+  // ---- Progression Rules ----
+  Future<List<ProgressionRule>> getProgressionRules(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'progression_rules'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List)
+        .map((e) => ProgressionRule.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ProgressionRule?> getProgressionRule(
+    String userId,
+    String exerciseId,
+  ) async {
+    final rules = await getProgressionRules(userId);
+    for (final rule in rules) {
+      if (rule.exerciseId == exerciseId) return rule;
+    }
+    return null;
+  }
+
+  Future<void> saveProgressionRule(String userId, ProgressionRule rule) async {
+    final rules = await getProgressionRules(userId);
+    final idx = rules.indexWhere((r) => r.exerciseId == rule.exerciseId);
+    if (idx >= 0) {
+      rules[idx] = rule;
+    } else {
+      rules.add(rule);
+    }
+    await _storage.write(
+      key: _key(userId, 'progression_rules'),
+      value: jsonEncode(rules.map((r) => r.toJson()).toList()),
+    );
+  }
+
+  Future<void> deleteProgressionRule(String userId, String exerciseId) async {
+    final rules = await getProgressionRules(userId);
+    rules.removeWhere((r) => r.exerciseId == exerciseId);
+    await _storage.write(
+      key: _key(userId, 'progression_rules'),
+      value: jsonEncode(rules.map((r) => r.toJson()).toList()),
     );
   }
 

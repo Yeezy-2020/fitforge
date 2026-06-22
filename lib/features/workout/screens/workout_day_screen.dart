@@ -5,10 +5,12 @@ import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/exercise.dart';
 import '../../../data/models/workout_log.dart';
+import '../../../data/models/progression_rule.dart';
 import '../../../data/repositories/app_database.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
+import '../../../core/utils/progression_calculator.dart';
 import '../../../data/models/workout_template.dart';
 import '../../workout/screens/templates_screen.dart';
 import 'exercise_detail_screen.dart';
@@ -623,6 +625,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
               exercise: ex,
               l10n: l10n,
               trainUnit: trainUnit,
+              date: widget.date,
               onAdd: (id, sets, reps, weight) =>
                   _addToPending(id, sets, reps, weight),
             ),
@@ -632,10 +635,11 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
   }
 }
 
-class _ExerciseCard extends StatefulWidget {
+class _ExerciseCard extends ConsumerStatefulWidget {
   final Exercise exercise;
   final L10n l10n;
   final WeightUnit trainUnit;
+  final DateTime date;
   final void Function(String exerciseId, int sets, int reps, double weight)
   onAdd;
   const _ExerciseCard({
@@ -643,15 +647,19 @@ class _ExerciseCard extends StatefulWidget {
     required this.exercise,
     required this.l10n,
     required this.trainUnit,
+    required this.date,
     required this.onAdd,
   });
 
   @override
-  State<_ExerciseCard> createState() => _ExerciseCardState();
+  ConsumerState<_ExerciseCard> createState() => _ExerciseCardState();
 }
 
-class _ExerciseCardState extends State<_ExerciseCard> {
+class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   late TextEditingController _setsCtrl, _repsCtrl, _weightCtrl;
+  bool _applying = false;
+  bool _userEdited = false;
+  String? _appliedKey;
 
   @override
   void initState() {
@@ -659,6 +667,11 @@ class _ExerciseCardState extends State<_ExerciseCard> {
     _setsCtrl = TextEditingController();
     _repsCtrl = TextEditingController();
     _weightCtrl = TextEditingController();
+    for (final c in [_setsCtrl, _repsCtrl, _weightCtrl]) {
+      c.addListener(() {
+        if (!_applying) _userEdited = true;
+      });
+    }
   }
 
   @override
@@ -669,9 +682,59 @@ class _ExerciseCardState extends State<_ExerciseCard> {
     super.dispose();
   }
 
+  String _suggestionKey(ProgressionSuggestion s) =>
+      '${s.sets}-${s.reps}-${s.weightKg}';
+
+  void _applySuggestion(ProgressionSuggestion s) {
+    _applying = true;
+    _setsCtrl.text = s.sets.toString();
+    _repsCtrl.text = s.reps.toString();
+    final w = widget.trainUnit == WeightUnit.lb
+        ? s.weightKg * kgToLb
+        : s.weightKg;
+    _weightCtrl.text = w.toStringAsFixed(1);
+    _applying = false;
+    _appliedKey = _suggestionKey(s);
+  }
+
+  void _clearForNext() {
+    _applying = true;
+    _setsCtrl.clear();
+    _repsCtrl.clear();
+    _weightCtrl.clear();
+    _applying = false;
+    setState(() {
+      _userEdited = false;
+      _appliedKey = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final unitLabel = widget.trainUnit == WeightUnit.kg ? 'kg' : 'lb';
+    final rule = ref.watch(
+      progressionRuleForExerciseProvider(widget.exercise.id),
+    );
+    final suggestion = ref.watch(
+      progressionSuggestionProvider((
+        exerciseId: widget.exercise.id,
+        before: widget.date,
+      )),
+    );
+
+    if (suggestion != null &&
+        !_userEdited &&
+        _appliedKey != _suggestionKey(suggestion)) {
+      final s = suggestion;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_userEdited || _appliedKey == _suggestionKey(s)) return;
+        setState(() => _applySuggestion(s));
+      });
+    }
+
+    final ruleActive = rule != null && rule.enabled;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
       child: InkWell(
@@ -697,6 +760,27 @@ class _ExerciseCardState extends State<_ExerciseCard> {
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 18,
+                    tooltip: widget.l10n.get('progressiveOverload'),
+                    icon: Icon(
+                      Icons.trending_up,
+                      size: 18,
+                      color: ruleActive
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).disabledColor,
+                    ),
+                    onPressed: () => showProgressionRuleSheet(
+                      context,
+                      ref,
+                      exercise: widget.exercise,
+                      l10n: widget.l10n,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   const Icon(Icons.info_outline, size: 16),
                 ],
               ),
@@ -723,23 +807,31 @@ class _ExerciseCardState extends State<_ExerciseCard> {
                   const Spacer(),
                   FilledButton.tonalIcon(
                     onPressed: () {
-                      final sets = int.tryParse(_setsCtrl.text) ?? 3;
+                      final sets =
+                          int.tryParse(_setsCtrl.text) ??
+                          (suggestion?.sets ?? 3);
                       final reps = int.tryParse(_repsCtrl.text) ?? 0;
                       double w = double.tryParse(_weightCtrl.text) ?? 0;
                       if (widget.trainUnit == WeightUnit.lb) w = w / kgToLb;
                       widget.onAdd(widget.exercise.id, sets, reps, w);
-                      _repsCtrl.clear();
-                      _weightCtrl.clear();
-                      _setsCtrl.clear();
-                      _repsCtrl.clear();
-                      _weightCtrl.clear();
-                      _setsCtrl.clear();
+                      _clearForNext();
                     },
                     icon: const Icon(Icons.add, size: 16),
                     label: const Text('Add', style: TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
+              if (ruleActive && suggestion != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${widget.l10n.get('suggested')}: ${suggestion.reason}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -770,6 +862,263 @@ class _ExerciseCardState extends State<_ExerciseCard> {
       ),
     );
   }
+}
+
+Future<void> showProgressionRuleSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  required Exercise exercise,
+  required L10n l10n,
+}) async {
+  final userId = ref.read(currentUserIdProvider);
+  final existing = ref.read(progressionRuleForExerciseProvider(exercise.id));
+
+  var type = existing?.type ?? ProgressionType.fixedWeight;
+  var enabled = existing?.enabled ?? true;
+  var onlyIfCompleted = existing?.onlyIfCompleted ?? true;
+  final incrementCtrl = TextEditingController(
+    text: (existing?.increment ?? 2.5).toString(),
+  );
+  final targetSetsCtrl = TextEditingController(
+    text: (existing?.targetSets ?? 3).toString(),
+  );
+  final targetRepsCtrl = TextEditingController(
+    text: (existing?.targetReps ?? 8).toString(),
+  );
+  final minRepsCtrl = TextEditingController(
+    text: (existing?.minReps ?? 8).toString(),
+  );
+  final maxRepsCtrl = TextEditingController(
+    text: (existing?.maxReps ?? 12).toString(),
+  );
+  final defWeightCtrl = TextEditingController(
+    text: existing?.defaultWeightKg?.toString() ?? '',
+  );
+  final defSetsCtrl = TextEditingController(
+    text: existing?.defaultSets?.toString() ?? '',
+  );
+  final defRepsCtrl = TextEditingController(
+    text: existing?.defaultReps?.toString() ?? '',
+  );
+
+  String typeLabel(ProgressionType t) {
+    switch (t) {
+      case ProgressionType.fixedWeight:
+        return l10n.get('typeFixedWeight');
+      case ProgressionType.percentWeight:
+        return l10n.get('typePercentWeight');
+      case ProgressionType.reps:
+        return l10n.get('typeReps');
+      case ProgressionType.doubleProgression:
+        return l10n.get('typeDoubleProgression');
+    }
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setSheet) {
+          Widget numField(TextEditingController c, String label) => Expanded(
+            child: TextField(
+              controller: c,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(labelText: label, isDense: true),
+            ),
+          );
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.trending_up, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${l10n.get('progressiveOverload')} · '
+                          '${l10n.exerciseName(exercise.id, exercise.name)}',
+                          style: Theme.of(ctx).textTheme.titleMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.get('enabled')),
+                    value: enabled,
+                    onChanged: (v) => setSheet(() => enabled = v),
+                  ),
+                  DropdownButtonFormField<ProgressionType>(
+                    initialValue: type,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: l10n.get('progressionType'),
+                      isDense: true,
+                    ),
+                    items: ProgressionType.values
+                        .map(
+                          (t) => DropdownMenuItem(
+                            value: t,
+                            child: Text(typeLabel(t)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setSheet(() => type = v ?? type),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [numField(incrementCtrl, l10n.get('increment'))],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      numField(targetSetsCtrl, l10n.get('targetSets')),
+                      const SizedBox(width: 8),
+                      numField(targetRepsCtrl, l10n.get('targetReps')),
+                    ],
+                  ),
+                  if (type == ProgressionType.doubleProgression) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        numField(minRepsCtrl, l10n.get('minReps')),
+                        const SizedBox(width: 8),
+                        numField(maxRepsCtrl, l10n.get('maxReps')),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      numField(
+                        defWeightCtrl,
+                        '${l10n.get('defaultWeight')} (kg)',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      numField(defSetsCtrl, l10n.get('defaultSets')),
+                      const SizedBox(width: 8),
+                      numField(defRepsCtrl, l10n.get('defaultReps')),
+                    ],
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(l10n.get('onlyIfCompleted')),
+                    value: onlyIfCompleted,
+                    onChanged: (v) =>
+                        setSheet(() => onlyIfCompleted = v ?? true),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (existing != null)
+                        TextButton.icon(
+                          onPressed: () async {
+                            await ref
+                                .read(progressionRulesProvider.notifier)
+                                .delete(exercise.id);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.get('ruleDeleted')),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Colors.red,
+                          ),
+                          label: Text(
+                            l10n.get('delete'),
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(l10n.get('cancel')),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () async {
+                          final rule = ProgressionRule(
+                            id:
+                                existing?.id ??
+                                DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                            userId: userId,
+                            exerciseId: exercise.id,
+                            type: type,
+                            enabled: enabled,
+                            increment:
+                                double.tryParse(incrementCtrl.text) ?? 2.5,
+                            targetSets: int.tryParse(targetSetsCtrl.text) ?? 3,
+                            targetReps: int.tryParse(targetRepsCtrl.text) ?? 8,
+                            minReps: type == ProgressionType.doubleProgression
+                                ? int.tryParse(minRepsCtrl.text)
+                                : existing?.minReps,
+                            maxReps: type == ProgressionType.doubleProgression
+                                ? int.tryParse(maxRepsCtrl.text)
+                                : existing?.maxReps,
+                            defaultWeightKg: double.tryParse(
+                              defWeightCtrl.text,
+                            ),
+                            defaultSets: int.tryParse(defSetsCtrl.text),
+                            defaultReps: int.tryParse(defRepsCtrl.text),
+                            onlyIfCompleted: onlyIfCompleted,
+                          );
+                          await ref
+                              .read(progressionRulesProvider.notifier)
+                              .save(rule);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(l10n.get('ruleSaved'))),
+                            );
+                          }
+                        },
+                        child: Text(l10n.get('save')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  incrementCtrl.dispose();
+  targetSetsCtrl.dispose();
+  targetRepsCtrl.dispose();
+  minRepsCtrl.dispose();
+  maxRepsCtrl.dispose();
+  defWeightCtrl.dispose();
+  defSetsCtrl.dispose();
+  defRepsCtrl.dispose();
 }
 
 class _PendingSet {
