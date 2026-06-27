@@ -8,6 +8,7 @@ import '../models/user_profile.dart';
 import '../models/workout_template.dart';
 import '../models/body_measurement.dart';
 import '../models/progression_rule.dart';
+import '../models/training_program.dart';
 import 'exercise_library.dart';
 
 class AppDatabase {
@@ -156,6 +157,169 @@ class AppDatabase {
       key: _key(userId, 'progression_rules'),
       value: jsonEncode(rules.map((r) => r.toJson()).toList()),
     );
+  }
+
+  // ---- Training Programs ----
+
+  Future<List<TrainingProgram>> getTrainingPrograms(String userId) async {
+    final data = await _storage.read(key: _key(userId, 'training_programs'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List)
+        .map((e) => TrainingProgram.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  List<TrainingProgram> _normalizeActiveTrainingPrograms(
+    List<TrainingProgram> programs,
+  ) {
+    var foundActive = false;
+    return programs.map((program) {
+      if (!program.active) return program;
+      if (!foundActive) {
+        foundActive = true;
+        return program;
+      }
+      return program.copyWith(active: false);
+    }).toList();
+  }
+
+  Future<void> saveTrainingPrograms(
+    String userId,
+    List<TrainingProgram> programs,
+  ) async {
+    final normalized = _normalizeActiveTrainingPrograms(programs);
+    await _storage.write(
+      key: _key(userId, 'training_programs'),
+      value: jsonEncode(normalized.map((p) => p.toJson()).toList()),
+    );
+  }
+
+  Future<void> saveTrainingProgram(
+    String userId,
+    TrainingProgram program,
+  ) async {
+    final programs = await getTrainingPrograms(userId);
+    final idx = programs.indexWhere((p) => p.id == program.id);
+    if (idx >= 0) {
+      programs[idx] = program;
+    } else {
+      programs.add(program);
+    }
+    final normalized = program.active
+        ? programs
+              .map(
+                (p) => p.id == program.id
+                    ? p.copyWith(active: true)
+                    : p.copyWith(active: false),
+              )
+              .toList()
+        : _normalizeActiveTrainingPrograms(programs);
+    await saveTrainingPrograms(userId, normalized);
+  }
+
+  Future<void> deleteTrainingProgram(String userId, String programId) async {
+    final programs = await getTrainingPrograms(userId);
+    programs.removeWhere((p) => p.id == programId);
+    await _storage.write(
+      key: _key(userId, 'training_programs'),
+      value: jsonEncode(programs.map((p) => p.toJson()).toList()),
+    );
+  }
+
+  Future<TrainingProgram?> getActiveTrainingProgram(String userId) async {
+    final programs = await getTrainingPrograms(userId);
+    for (final p in programs) {
+      if (p.active) return p;
+    }
+    return null;
+  }
+
+  Future<void> setActiveTrainingProgram(String userId, String programId) async {
+    final programs = await getTrainingPrograms(userId);
+    if (!programs.any((p) => p.id == programId)) return;
+    for (int i = 0; i < programs.length; i++) {
+      programs[i] = programs[i].copyWith(active: programs[i].id == programId);
+    }
+    await saveTrainingPrograms(userId, programs);
+  }
+
+  Future<void> saveWorkoutSetLogs(
+    String userId,
+    List<WorkoutSetLog> logs,
+  ) async {
+    final data = await _storage.read(key: _key(userId, 'workout_set_logs'));
+    final existing = data != null
+        ? (jsonDecode(data) as List)
+              .map((e) => WorkoutSetLog.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : <WorkoutSetLog>[];
+    final existingIds = existing.map((l) => l.id).toSet();
+    for (final log in logs) {
+      final idx = existing.indexWhere((item) => item.id == log.id);
+      if (idx >= 0) {
+        existing[idx] = log;
+      } else if (!existingIds.contains(log.id)) {
+        existing.add(log);
+      }
+    }
+    await _storage.write(
+      key: _key(userId, 'workout_set_logs'),
+      value: jsonEncode(existing.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  Future<List<WorkoutSetLog>> getWorkoutSetLogs(
+    String userId,
+    String workoutLogId,
+  ) async {
+    final data = await _storage.read(key: _key(userId, 'workout_set_logs'));
+    if (data == null) return [];
+    return (jsonDecode(data) as List)
+        .map((e) => WorkoutSetLog.fromJson(e as Map<String, dynamic>))
+        .where((log) => log.workoutLogId == workoutLogId)
+        .toList();
+  }
+
+  Future<WorkoutLog?> getLastWorkoutLogForProgramExercise(
+    String userId, {
+    required String programId,
+    required String programExerciseId,
+    required DateTime beforeDate,
+  }) async {
+    final setLogData = await _storage.read(
+      key: _key(userId, 'workout_set_logs'),
+    );
+    if (setLogData == null) return null;
+
+    final setLogs = (jsonDecode(setLogData) as List)
+        .map((e) => WorkoutSetLog.fromJson(e as Map<String, dynamic>))
+        .where(
+          (log) =>
+              log.programId == programId &&
+              log.programExerciseId == programExerciseId,
+        )
+        .toList();
+    if (setLogs.isEmpty) return null;
+
+    final workoutLogIds = setLogs.map((log) => log.workoutLogId).toSet();
+    final logs =
+        (await _getAllWorkoutLogs(userId))
+            .where(
+              (log) =>
+                  workoutLogIds.contains(log.id) &&
+                  log.date.isBefore(beforeDate),
+            )
+            .toList()
+          ..sort((a, b) {
+            final dateCompare = b.date.compareTo(a.date);
+            if (dateCompare != 0) return dateCompare;
+            final aCreated =
+                a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bCreated =
+                b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bCreated.compareTo(aCreated);
+          });
+    return logs.isNotEmpty ? logs.first : null;
   }
 
   Future<List<DietLog>> getDietLogs(String userId, DateTime date) async {

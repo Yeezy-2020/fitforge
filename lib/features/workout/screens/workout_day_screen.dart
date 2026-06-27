@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../data/models/exercise.dart';
 import '../../../data/models/workout_log.dart';
 import '../../../data/models/progression_rule.dart';
+import '../../../data/models/training_program.dart';
 import '../../../data/repositories/app_database.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
@@ -41,10 +42,10 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Save as Template'),
+        title: Text(l10n.get('saveAsTemplate')),
         content: TextField(
           controller: nameCtrl,
-          decoration: const InputDecoration(hintText: 'Template name'),
+          decoration: InputDecoration(hintText: l10n.get('templateName')),
         ),
         actions: [
           TextButton(
@@ -76,9 +77,11 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final userId = ref.read(currentUserIdProvider);
     await AppDatabase.instance.saveTemplate(userId, template);
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Template "$name" saved')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.get('templateSaved').replaceFirst('{name}', name)),
+        ),
+      );
     }
   }
 
@@ -92,7 +95,15 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     super.dispose();
   }
 
-  void _addToPending(String exerciseId, int sets, int reps, double weight) {
+  void _addToPending(
+    String exerciseId,
+    int sets,
+    int reps,
+    double weight, {
+    String? programId,
+    String? programDayId,
+    String? programExerciseId,
+  }) {
     final l10n = ref.read(l10nProvider);
     if (reps <= 0) {
       ScaffoldMessenger.of(
@@ -107,6 +118,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           sets: sets,
           reps: reps,
           weight: weight,
+          programId: programId,
+          programDayId: programDayId,
+          programExerciseId: programExerciseId,
         ),
       ),
     );
@@ -139,10 +153,27 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     _customSetsCtrl.text = '3';
   }
 
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  bool get _selectedDateIsToday => _isSameDate(widget.date, DateTime.now());
+
+  Future<void> _advanceActiveProgram(L10n l10n) async {
+    await ref.read(trainingProgramsProvider.notifier).advanceDay();
+    ref.invalidate(workoutPrescriptionsForDateProvider(widget.date));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.get('programAdvanced'))));
+  }
+
   Future<void> _saveAll() async {
     final l10n = ref.read(l10nProvider);
     final userId = ref.read(currentUserIdProvider);
     final savedLogs = <WorkoutLog>[];
+    final activeProgram = ref.read(activeTrainingProgramProvider);
+    final activeProgramDay = activeProgram?.currentDay;
+    final savedCurrentProgramExerciseIds = <String>{};
     for (final p in _pendingSets) {
       final log = WorkoutLog(
         id: _uuid.v4(),
@@ -156,7 +187,51 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
       );
       savedLogs.add(log);
       await AppDatabase.instance.addWorkoutLog(userId, log);
+
+      // Save WorkoutSetLog records for program-derived items (local only)
+      final programId = p.programId;
+      final programDayId = p.programDayId;
+      final programExerciseId = p.programExerciseId;
+      if (programId != null &&
+          programDayId != null &&
+          programExerciseId != null) {
+        if (activeProgram != null &&
+            activeProgramDay != null &&
+            programId == activeProgram.id &&
+            programDayId == activeProgramDay.id) {
+          savedCurrentProgramExerciseIds.add(programExerciseId);
+        }
+        final setLogs = <WorkoutSetLog>[];
+        for (int i = 0; i < p.sets; i++) {
+          setLogs.add(
+            WorkoutSetLog(
+              id: _uuid.v4(),
+              workoutLogId: log.id,
+              programId: programId,
+              programExerciseId: programExerciseId,
+              setIndex: i,
+              reps: p.reps,
+              weightKg: p.weight,
+              completed: true,
+            ),
+          );
+        }
+        await AppDatabase.instance.saveWorkoutSetLogs(userId, setLogs);
+      }
     }
+
+    // Program advance: only when every planned exercise is covered
+    String message = l10n.get('workoutSaved');
+    if (shouldAdvanceProgram(
+      currentDay: activeProgramDay,
+      savedProgramExerciseIds: savedCurrentProgramExerciseIds,
+      advanceMode: activeProgram?.advanceMode ?? AdvanceMode.manual,
+      selectedDateIsToday: _selectedDateIsToday,
+    )) {
+      await ref.read(trainingProgramsProvider.notifier).advanceDay();
+      message = '${l10n.get('workoutSaved')} · ${l10n.get('programAdvanced')}';
+    }
+
     // Update cache IMMEDIATELY so calendar shows instant results
     ref.read(workoutCacheProvider.notifier).addDate(widget.date);
     ref.read(workoutLogCacheProvider.notifier).addLogs(widget.date, savedLogs);
@@ -173,7 +248,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
       setState(() => _pendingSets = []);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(l10n.get('workoutSaved'))));
+      ).showSnackBar(SnackBar(content: Text(message)));
       context.pop();
     }
   }
@@ -293,6 +368,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                   sets: newSets.clamp(1, 999),
                   reps: newReps.clamp(1, 9999),
                   weight: newWeight,
+                  programId: p.programId,
+                  programDayId: p.programDayId,
+                  programExerciseId: p.programExerciseId,
                 );
               });
               Navigator.pop(ctx);
@@ -312,6 +390,12 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final trainUnit = ref.watch(trainingWeightUnitProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final l10n2 = ref.watch(l10nProvider);
+    final activeProgram = ref.watch(activeTrainingProgramProvider);
+    final programPrescriptions =
+        ref
+            .watch(workoutPrescriptionsForDateProvider(widget.date))
+            .valueOrNull ??
+        [];
     String exName(String id) {
       final ex = exercises.where((e) => e.id == id).firstOrNull;
       if (ex == null) return id;
@@ -342,7 +426,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             ),
           IconButton(
             icon: const Icon(Icons.bookmark_border),
-            tooltip: 'Templates',
+            tooltip: l10n.get('templates'),
             onPressed: () async {
               final result = await Navigator.push(
                 context,
@@ -363,7 +447,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           if (_pendingSets.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.bookmark_add),
-              tooltip: 'Save as Template',
+              tooltip: l10n.get('saveAsTemplate'),
               onPressed: _saveAsTemplate,
             ),
         ],
@@ -439,6 +523,14 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                 ],
               ),
             ),
+          if (activeProgram != null)
+            _buildProgramPanel(
+              activeProgram,
+              programPrescriptions,
+              l10n,
+              exercises,
+              trainUnit,
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: TextField(
@@ -464,7 +556,178 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             ),
           ),
           Expanded(
-            child: _buildMainContent(l10n, bodyParts, filtered, trainUnit),
+            child: _buildMainContent(
+              l10n,
+              bodyParts,
+              filtered,
+              trainUnit,
+              showExerciseProgression: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgramPanel(
+    TrainingProgram program,
+    List<WorkoutPrescription> prescriptions,
+    L10n l10n,
+    List<Exercise> exercises,
+    WeightUnit trainUnit,
+  ) {
+    final day = program.currentDay;
+    if (day == null) return const SizedBox.shrink();
+
+    String exName(String id) {
+      final ex = exercises.where((e) => e.id == id).firstOrNull;
+      if (ex == null) return id;
+      return l10n.exerciseName(ex.id, ex.name);
+    }
+
+    if (day.kind == DayKind.rest) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.hotel, size: 18, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${l10n.get('restDay')} — ${day.name}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            if (_selectedDateIsToday)
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => _advanceActiveProgram(l10n),
+                child: Text(
+                  l10n.get('completeRestDay'),
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    if (prescriptions.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Row(
+              children: [
+                const Icon(Icons.fitness_center, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  '${l10n.get('todayProgram')}: ${day.name}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...prescriptions.map(
+            (rx) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      exName(rx.exerciseId),
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${rx.sets} × ${rx.reps} @ ${formatTrainingWeight(rx.weightKg, trainUnit)}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  const SizedBox(width: 4),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () => _addToPending(
+                      rx.exerciseId,
+                      rx.sets,
+                      rx.reps,
+                      rx.weightKg,
+                      programId: rx.programId,
+                      programDayId: rx.programDayId,
+                      programExerciseId: rx.programExerciseId,
+                    ),
+                    child: Text(
+                      l10n.get('add'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+            child: Row(
+              children: [
+                const Spacer(),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.add, size: 14),
+                  label: Text(
+                    l10n.get('addAll'),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  onPressed: () {
+                    for (final rx in prescriptions) {
+                      _addToPending(
+                        rx.exerciseId,
+                        rx.sets,
+                        rx.reps,
+                        rx.weightKg,
+                        programId: rx.programId,
+                        programDayId: rx.programDayId,
+                        programExerciseId: rx.programExerciseId,
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -475,8 +738,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     L10n l10n,
     List<String> bodyParts,
     List<Exercise> filtered,
-    WeightUnit trainUnit,
-  ) {
+    WeightUnit trainUnit, {
+    required bool showExerciseProgression,
+  }) {
     return Row(
       children: [
         SizedBox(
@@ -543,7 +807,12 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
               ? Center(child: Text(l10n.get('selectBodyPart')))
               : _selectedBodyPart == '__custom__'
               ? _buildCustomExerciseForm(l10n)
-              : _buildExerciseList(l10n, filtered, trainUnit),
+              : _buildExerciseList(
+                  l10n,
+                  filtered,
+                  trainUnit,
+                  showExerciseProgression,
+                ),
         ),
       ],
     );
@@ -614,6 +883,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     L10n l10n,
     List<Exercise> exercises,
     WeightUnit trainUnit,
+    bool showExerciseProgression,
   ) {
     if (exercises.isEmpty) return Center(child: Text(l10n.get('noExercises')));
     return ListView(
@@ -626,6 +896,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
               l10n: l10n,
               trainUnit: trainUnit,
               date: widget.date,
+              showProgressionControls: showExerciseProgression,
               onAdd: (id, sets, reps, weight) =>
                   _addToPending(id, sets, reps, weight),
             ),
@@ -640,6 +911,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
   final L10n l10n;
   final WeightUnit trainUnit;
   final DateTime date;
+  final bool showProgressionControls;
   final void Function(String exerciseId, int sets, int reps, double weight)
   onAdd;
   const _ExerciseCard({
@@ -648,6 +920,7 @@ class _ExerciseCard extends ConsumerStatefulWidget {
     required this.l10n,
     required this.trainUnit,
     required this.date,
+    required this.showProgressionControls,
     required this.onAdd,
   });
 
@@ -712,15 +985,17 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
   @override
   Widget build(BuildContext context) {
     final unitLabel = widget.trainUnit == WeightUnit.kg ? 'kg' : 'lb';
-    final rule = ref.watch(
-      progressionRuleForExerciseProvider(widget.exercise.id),
-    );
-    final suggestion = ref.watch(
-      progressionSuggestionProvider((
-        exerciseId: widget.exercise.id,
-        before: widget.date,
-      )),
-    );
+    final rule = widget.showProgressionControls
+        ? ref.watch(progressionRuleForExerciseProvider(widget.exercise.id))
+        : null;
+    final suggestion = widget.showProgressionControls
+        ? ref.watch(
+            progressionSuggestionProvider((
+              exerciseId: widget.exercise.id,
+              before: widget.date,
+            )),
+          )
+        : null;
 
     if (suggestion != null &&
         !_userEdited &&
@@ -760,26 +1035,27 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    iconSize: 18,
-                    tooltip: widget.l10n.get('progressiveOverload'),
-                    icon: Icon(
-                      Icons.trending_up,
-                      size: 18,
-                      color: ruleActive
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).disabledColor,
+                  if (widget.showProgressionControls)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 18,
+                      tooltip: widget.l10n.get('progressiveOverload'),
+                      icon: Icon(
+                        Icons.trending_up,
+                        size: 18,
+                        color: ruleActive
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).disabledColor,
+                      ),
+                      onPressed: () => showProgressionRuleSheet(
+                        context,
+                        ref,
+                        exercise: widget.exercise,
+                        l10n: widget.l10n,
+                      ),
                     ),
-                    onPressed: () => showProgressionRuleSheet(
-                      context,
-                      ref,
-                      exercise: widget.exercise,
-                      l10n: widget.l10n,
-                    ),
-                  ),
                   const SizedBox(width: 4),
                   const Icon(Icons.info_outline, size: 16),
                 ],
@@ -1125,10 +1401,16 @@ class _PendingSet {
   final String exerciseId;
   final int sets, reps;
   final double weight;
+  final String? programId;
+  final String? programDayId;
+  final String? programExerciseId;
   _PendingSet({
     required this.exerciseId,
     required this.sets,
     required this.reps,
     required this.weight,
+    this.programId,
+    this.programDayId,
+    this.programExerciseId,
   });
 }

@@ -9,6 +9,7 @@ import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/home/home_shell.dart';
 import 'features/workout/screens/workout_day_screen.dart';
+import 'features/workout/screens/training_programs_screen.dart';
 import 'features/subscription/screens/paywall_screen.dart';
 import 'features/settings/screens/profile_screen.dart';
 import 'features/settings/screens/settings_screen.dart';
@@ -49,6 +50,10 @@ final _routerProvider = Provider<GoRouter>((ref) {
             builder: (c, s) => WorkoutDayScreen(
               date: DateTime.parse(s.pathParameters['date']!),
             ),
+          ),
+          GoRoute(
+            path: 'programs',
+            builder: (c, s) => const TrainingProgramsScreen(),
           ),
         ],
       ),

@@ -29,6 +29,9 @@
 - 训练日历 + 拖拽排序，滑动折叠日历
 - 29 种动作双语库（中/英），含 Wger 图片、动作要领、常见错误
 - 训练模板保存/加载
+- 训练计划 MVP：支持练三休一、训练日/休息日、动作处方、今日计划建议
+- 渐进超负荷引擎：支持双进阶、线性加重、周期化 MVP，并基于历史训练生成下次建议
+- 计划完成推进：保存完整计划训练后自动推进到下一训练日/休息日
 - 组间休息计时器（5s–10min CupertinoPicker）
 - 训练记录离线缓存 + Supabase 同步
 
@@ -77,6 +80,8 @@ lib/
 │   │   ├── user_profile.dart   # 用户资料
 │   │   ├── workout_template.dart
 │   │   ├── body_measurement.dart
+│   │   ├── progression_rule.dart
+│   │   ├── training_program.dart # 训练计划/训练日/动作处方/组级记录
 │   │   └── nutrition_plan.dart
 │   └── repositories/
 │       ├── app_database.dart   # 本地持久化 (SecureStorage)
@@ -153,6 +158,10 @@ flutter test
 
 # 新功能专项测试
 flutter test test/screens/nutrition_test.dart
+
+# 渐进超负荷 / 训练计划专项测试
+flutter test test/features/progression_test.dart
+flutter test test/features/training_program_test.dart
 ```
 
 ## 部署

@@ -6,10 +6,12 @@ import '../data/models/food.dart';
 import '../data/models/diet_log.dart';
 import '../data/models/user_profile.dart';
 import '../data/models/progression_rule.dart';
+import '../data/models/training_program.dart';
 import '../data/repositories/app_database.dart';
 import '../core/services/supabase_service.dart';
 import '../core/utils/nutrition_calculator.dart';
 import '../core/utils/progression_calculator.dart';
+import '../core/utils/program_prescription_calculator.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>(
   (ref) => AppDatabase.instance,
@@ -329,6 +331,93 @@ final progressionSuggestionProvider =
         lastLog: lastLog,
         rule: rule,
       );
+    });
+
+// ===== Training Programs =====
+final trainingProgramsProvider =
+    AsyncNotifierProvider<TrainingProgramsNotifier, List<TrainingProgram>>(
+      TrainingProgramsNotifier.new,
+    );
+
+class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
+  @override
+  Future<List<TrainingProgram>> build() async {
+    final userId = ref.watch(currentUserIdProvider);
+    return AppDatabase.instance.getTrainingPrograms(userId);
+  }
+
+  Future<void> save(TrainingProgram program) async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.saveTrainingProgram(userId, program);
+    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+  }
+
+  Future<void> delete(String programId) async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.deleteTrainingProgram(userId, programId);
+    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+  }
+
+  Future<void> setActive(String programId) async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.setActiveTrainingProgram(userId, programId);
+    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+  }
+
+  Future<void> advanceDay() async {
+    final userId = ref.read(currentUserIdProvider);
+    final program = await AppDatabase.instance.getActiveTrainingProgram(userId);
+    if (program == null) return;
+    final advanced = program.advanceToNextDay();
+    await AppDatabase.instance.saveTrainingProgram(userId, advanced);
+    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+  }
+}
+
+final activeTrainingProgramProvider = Provider<TrainingProgram?>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  final programs = ref.watch(trainingProgramsProvider).valueOrNull ?? [];
+  return activeTrainingProgramForUser(programs, userId);
+});
+
+/// Computes a list of [WorkoutPrescription]s for the given [date] based on
+/// the active training program's current day. Returns empty list when there
+/// is no active program, no current day, a rest day, or an empty day.
+/// Uses local-only storage — does not connect Supabase.
+final workoutPrescriptionsForDateProvider =
+    FutureProvider.family<List<WorkoutPrescription>, DateTime>((
+      ref,
+      date,
+    ) async {
+      final userId = ref.watch(currentUserIdProvider);
+      final program = ref.watch(activeTrainingProgramProvider);
+      if (program == null) return [];
+      if (program.userId != userId) return [];
+
+      final day = program.currentDay;
+      if (day == null || day.kind == DayKind.rest) return [];
+
+      final prescriptions = <WorkoutPrescription>[];
+      final orderedExercises = [...day.exercises]
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      for (final exercise in orderedExercises) {
+        final lastLog = await AppDatabase.instance
+            .getLastWorkoutLogForProgramExercise(
+              userId,
+              programId: program.id,
+              programExerciseId: exercise.id,
+              beforeDate: date,
+            );
+        prescriptions.add(
+          const ProgramPrescriptionCalculator().calculate(
+            programExercise: exercise,
+            programId: program.id,
+            programDayId: day.id,
+            lastLog: lastLog,
+          ),
+        );
+      }
+      return prescriptions;
     });
 
 // ===== Diet Logs =====

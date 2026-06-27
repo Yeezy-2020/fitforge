@@ -136,6 +136,11 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
             const Spacer(),
             Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
             const Spacer(),
+            IconButton(
+              tooltip: 'Programs',
+              icon: const Icon(Icons.assignment_outlined),
+              onPressed: () => context.push('/home/programs'),
+            ),
             _todayBtn(
               onTap: () {
                 final today = DateTime.now();
