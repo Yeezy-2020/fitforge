@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
-import 'package:intl/intl.dart';
 import '../../../data/models/exercise.dart';
 import '../../../data/models/workout_log.dart';
 import '../../../data/models/progression_rule.dart';
@@ -78,9 +77,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     await AppDatabase.instance.saveTemplate(userId, template);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.get('templateSaved').replaceFirst('{name}', name)),
-        ),
+        SnackBar(content: Text(l10n.format('templateSaved', {'name': name}))),
       );
     }
   }
@@ -142,8 +139,8 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final exercise = Exercise(
       id: exId,
       name: name,
-      bodyPart: _selectedBodyPart ?? 'Custom',
-      category: 'Custom',
+      bodyPart: '自定义',
+      bodyPartEn: 'Custom',
     );
     ref.read(exerciseListProvider.notifier).addExercise(exercise);
     _addToPending(exId, sets, reps, weight);
@@ -414,9 +411,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          '${DateFormat('MMM d').format(widget.date)} ${l10n.get('workout')}',
-        ),
+        title: Text('${l10n.shortDate(widget.date)} ${l10n.get('workout')}'),
         actions: [
           if (_pendingSets.isNotEmpty)
             TextButton.icon(
@@ -465,7 +460,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                       const Icon(Icons.checklist, size: 16),
                       const SizedBox(width: 8),
                       Text(
-                        '${l10n.get('pending')}: ${_pendingSets.length} sets',
+                        l10n.format('pendingSetCount', {
+                          'count': _pendingSets.length.toString(),
+                        }),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const Spacer(),
@@ -1093,7 +1090,10 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                       _clearForNext();
                     },
                     icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add', style: TextStyle(fontSize: 12)),
+                    label: Text(
+                      widget.l10n.get('add'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -1101,7 +1101,8 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    '${widget.l10n.get('suggested')}: ${suggestion.reason}',
+                    '${widget.l10n.get('suggested')}: '
+                    '${widget.l10n.format(suggestion.reasonKey, suggestion.reasonParams)}',
                     style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context).colorScheme.primary,

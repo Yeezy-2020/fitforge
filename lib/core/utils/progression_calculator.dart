@@ -6,12 +6,16 @@ class ProgressionSuggestion {
   final int reps;
   final double weightKg;
   final String reason;
+  final String reasonKey;
+  final Map<String, String> reasonParams;
 
   const ProgressionSuggestion({
     required this.sets,
     required this.reps,
     required this.weightKg,
     required this.reason,
+    required this.reasonKey,
+    this.reasonParams = const {},
   });
 }
 
@@ -38,6 +42,7 @@ class ProgressionCalculator {
         reps: _clampReps(rule.defaultReps ?? 8),
         weightKg: _clampWeight(rule.defaultWeightKg ?? 0),
         reason: 'No previous record. Using default values.',
+        reasonKey: 'progReasonNoPrevious',
       );
     }
 
@@ -52,6 +57,11 @@ class ProgressionCalculator {
         reason:
             'Target ${rule.targetSets}x${rule.targetReps} not met last time. '
             'Repeat the same weight and reps.',
+        reasonKey: 'progReasonTargetNotMet',
+        reasonParams: {
+          'sets': rule.targetSets.toString(),
+          'reps': rule.targetReps.toString(),
+        },
       );
     }
 
@@ -63,6 +73,8 @@ class ProgressionCalculator {
           reps: _clampReps(lastLog.reps),
           weightKg: _clampWeight(weight),
           reason: '+${rule.increment} kg from last time.',
+          reasonKey: 'progReasonFixedWeight',
+          reasonParams: {'increment': rule.increment.toString()},
         );
 
       case ProgressionType.percentWeight:
@@ -72,6 +84,8 @@ class ProgressionCalculator {
           reps: _clampReps(lastLog.reps),
           weightKg: _clampWeight(weight),
           reason: '+${rule.increment}% weight from last time.',
+          reasonKey: 'progReasonPercentWeight',
+          reasonParams: {'increment': rule.increment.toString()},
         );
 
       case ProgressionType.reps:
@@ -81,6 +95,8 @@ class ProgressionCalculator {
           reps: _clampReps(reps),
           weightKg: _clampWeight(lastLog.weightKg),
           reason: '+${rule.increment.round()} reps from last time.',
+          reasonKey: 'progReasonReps',
+          reasonParams: {'increment': rule.increment.round().toString()},
         );
 
       case ProgressionType.doubleProgression:
@@ -92,6 +108,8 @@ class ProgressionCalculator {
             reps: _clampReps(lastLog.reps + 1),
             weightKg: _clampWeight(lastLog.weightKg),
             reason: 'Add 1 rep until you reach $maxReps reps.',
+            reasonKey: 'progReasonDoubleAddRep',
+            reasonParams: {'maxReps': maxReps.toString()},
           );
         }
         return ProgressionSuggestion(
@@ -101,6 +119,12 @@ class ProgressionCalculator {
           reason:
               'Reached $maxReps reps. +${rule.increment} kg and reset to '
               '$minReps reps.',
+          reasonKey: 'progReasonDoubleIncreaseWeight',
+          reasonParams: {
+            'maxReps': maxReps.toString(),
+            'increment': rule.increment.toString(),
+            'minReps': minReps.toString(),
+          },
         );
     }
   }

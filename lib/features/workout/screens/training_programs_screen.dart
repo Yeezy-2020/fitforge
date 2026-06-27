@@ -49,7 +49,7 @@ class _TrainingProgramsScreenState
       ),
       body: programsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text('${l10n.get('failedToLoad')}: $e')),
         data: (programs) {
           if (programs.isEmpty) {
             return Center(
@@ -100,14 +100,14 @@ class _TrainingProgramsScreenState
     final program = TrainingProgram(
       id: _newId(),
       userId: userId,
-      name: 'PPL',
+      name: l10n.get('starterPPL'),
       active: !existing.any((p) => p.active),
       createdAt: now,
       updatedAt: now,
       days: [
         ProgramDay(
           id: _newId(),
-          name: 'Push',
+          name: l10n.get('pushDay'),
           kind: DayKind.training,
           exercises: [
             ProgramExercise(
@@ -129,7 +129,7 @@ class _TrainingProgramsScreenState
         ),
         ProgramDay(
           id: _newId(),
-          name: 'Pull',
+          name: l10n.get('pullDay'),
           kind: DayKind.training,
           exercises: [
             ProgramExercise(
@@ -151,7 +151,7 @@ class _TrainingProgramsScreenState
         ),
         ProgramDay(
           id: _newId(),
-          name: 'Legs',
+          name: l10n.get('legsDay'),
           kind: DayKind.training,
           exercises: [
             ProgramExercise(id: _newId(), exerciseId: 'ex_squat', sortOrder: 0),
@@ -167,7 +167,11 @@ class _TrainingProgramsScreenState
             ),
           ],
         ),
-        ProgramDay(id: _newId(), name: 'Rest', kind: DayKind.rest),
+        ProgramDay(
+          id: _newId(),
+          name: l10n.get('restDayName'),
+          kind: DayKind.rest,
+        ),
       ],
     );
     await ref.read(trainingProgramsProvider.notifier).save(program);
@@ -219,7 +223,7 @@ class _TrainingProgramsScreenState
       builder: (ctx) => AlertDialog(
         title: Text(l10n.get('deleteProgram')),
         content: Text(
-          l10n.get('deleteProgramConfirm').replaceFirst('{name}', program.name),
+          l10n.format('deleteProgramConfirm', {'name': program.name}),
         ),
         actions: [
           TextButton(
@@ -303,7 +307,10 @@ class _ProgramCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${program.days.length} ${l10n.get('days')}, $trainingDays ${l10n.get('trainingDays')}',
+                      l10n.format('programCardSummary', {
+                        'days': program.days.length.toString(),
+                        'training': trainingDays.toString(),
+                      }),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.grey,
                       ),

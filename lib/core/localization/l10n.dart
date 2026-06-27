@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 enum AppLocale { en, zh }
 
 class L10n {
@@ -47,6 +49,7 @@ class L10n {
     'training': 'Training',
     'save': 'Save',
     'pending': 'Pending',
+    'pendingSetCount': 'Pending: {count} sets',
     'clear': 'Clear',
     'sets': 'Sets',
     'reps': 'Reps',
@@ -80,6 +83,7 @@ class L10n {
     'active': 'Active',
     'days': 'days',
     'trainingDays': 'training',
+    'programCardSummary': '{days} days, {training} training',
 
     'progressiveOverload': 'Progressive Overload',
     'progressionRule': 'Progression Rule',
@@ -99,6 +103,15 @@ class L10n {
     'defaultReps': 'Default reps',
     'onlyIfCompleted': 'Only progress if target met',
     'suggested': 'Suggested',
+    'progReasonNoPrevious': 'No previous record. Using default values.',
+    'progReasonTargetNotMet':
+        'Target {sets}x{reps} not met last time. Repeat the same weight and reps.',
+    'progReasonFixedWeight': '+{increment} kg from last time.',
+    'progReasonPercentWeight': '+{increment}% weight from last time.',
+    'progReasonReps': '+{increment} reps from last time.',
+    'progReasonDoubleAddRep': 'Add 1 rep until you reach {maxReps} reps.',
+    'progReasonDoubleIncreaseWeight':
+        'Reached {maxReps} reps. +{increment} kg and reset to {minReps} reps.',
     'ruleSaved': 'Progression rule saved',
     'ruleDeleted': 'Progression rule deleted',
 
@@ -211,6 +224,66 @@ class L10n {
     'bp_手臂': 'Arms',
     'bp_核心': 'Core',
     'bp_有氧': 'Cardio',
+    'bp_自定义': 'Custom',
+
+    // ── Program detail ──
+    'program': 'Program',
+    'programNotFound': 'Program not found',
+    'addTrainingDay': 'Add training day',
+    'addRestDay': 'Add rest day',
+    'dayName': 'Day name',
+    'editDay': 'Edit day',
+    'deleteDay': 'Delete day',
+    'deleteDayConfirm': 'Delete "{name}"?',
+    'noDaysYet': 'No days yet',
+    'noExercisesInDay': 'No exercises',
+    'addExerciseToDay': 'Add exercise',
+    'editEx': 'Edit',
+    'removeEx': 'Remove',
+    'searchEx': 'Search',
+    'startWeightKg': 'Start kg',
+    'incrementKg': 'Add kg',
+    'progressionOpt': 'Progression',
+    'progDouble': 'Double progression',
+    'progLinear': 'Linear weight',
+    'progPeriodized': 'Periodized',
+    'invalidConfig': 'Enter valid sets, reps, weight, and increment.',
+    'trainingDaysCount': '{training} training days, {rest} rest days',
+    'currentDayN': 'Day {n}',
+    'daySectionN': 'Day {n}: {name}',
+    'trainingDayBtn': 'Training day',
+    'restDayBtn': 'Rest day',
+    'trainingSeg': 'Training',
+    'restSeg': 'Rest',
+
+    // ── Exercise summary ──
+    'exSummaryNoWt':
+        '{sets} sets · {reps} reps · Weight not set · {scheme} +{inc} kg',
+    'exSummaryWt':
+        '{sets} sets · {reps} reps · Start {weight} kg · {scheme} +{inc} kg',
+
+    // ── Starter program ──
+    'starterPPL': 'PPL',
+    'pushDay': 'Push',
+    'pullDay': 'Pull',
+    'legsDay': 'Legs',
+    'restDayName': 'Rest',
+
+    // ── Templates ──
+    'trainingTemplates': 'Training Templates',
+    'noTemplatesYet': 'No templates yet',
+    'nExercises': '{n} exercises',
+
+    // ── Rest timer ──
+    'restTimerTitle': 'Rest Timer',
+    'restTimerLabel': 'Rest',
+    'readyLabel': 'Ready',
+    'setLabel': 'Set',
+
+    // ── Calendar ──
+    'programsTip': 'Programs',
+    'todayLabel': 'Today',
+    'monthLabel': 'Month',
   };
 
   static const _zh = <String, String>{
@@ -256,6 +329,7 @@ class L10n {
     'training': '训练',
     'save': '保存',
     'pending': '待保存',
+    'pendingSetCount': '待保存：{count}组',
     'clear': '清空',
     'sets': '组',
     'reps': '次',
@@ -289,6 +363,7 @@ class L10n {
     'active': '当前',
     'days': '天',
     'trainingDays': '训练日',
+    'programCardSummary': '{days}天，{training}个训练日',
 
     'progressiveOverload': '渐进超负荷',
     'progressionRule': '进阶规则',
@@ -308,6 +383,14 @@ class L10n {
     'defaultReps': '默认次数',
     'onlyIfCompleted': '仅在达成目标时进阶',
     'suggested': '建议',
+    'progReasonNoPrevious': '暂无历史记录，使用默认值。',
+    'progReasonTargetNotMet': '上次未达成 {sets}x{reps}，本次保持相同重量和次数。',
+    'progReasonFixedWeight': '在上次基础上增加 {increment} kg。',
+    'progReasonPercentWeight': '在上次基础上增加 {increment}% 重量。',
+    'progReasonReps': '在上次基础上增加 {increment} 次。',
+    'progReasonDoubleAddRep': '先每组增加 1 次，直到达到 {maxReps} 次。',
+    'progReasonDoubleIncreaseWeight':
+        '已达到 {maxReps} 次，增加 {increment} kg 并回到 {minReps} 次。',
     'ruleSaved': '进阶规则已保存',
     'ruleDeleted': '进阶规则已删除',
 
@@ -380,11 +463,78 @@ class L10n {
     'commonMistakes': '常见错误',
     'category': '类别',
     'area': '部位',
+
+    // ── Program detail ──
+    'program': '计划',
+    'programNotFound': '未找到计划',
+    'addTrainingDay': '添加训练日',
+    'addRestDay': '添加休息日',
+    'dayName': '日程名称',
+    'editDay': '编辑日程',
+    'deleteDay': '删除日程',
+    'deleteDayConfirm': '删除"{name}"？',
+    'noDaysYet': '暂无日程',
+    'noExercisesInDay': '暂无动作',
+    'addExerciseToDay': '添加动作',
+    'editEx': '编辑',
+    'removeEx': '移除',
+    'searchEx': '搜索',
+    'startWeightKg': '起始重量(kg)',
+    'incrementKg': '增量(kg)',
+    'progressionOpt': '进阶方式',
+    'progDouble': '双进阶',
+    'progLinear': '线性加重',
+    'progPeriodized': '周期化',
+    'invalidConfig': '请输入有效的组数、次数、重量和增量。',
+    'trainingDaysCount': '{training}个训练日，{rest}个休息日',
+    'currentDayN': '第{n}天',
+    'daySectionN': '第{n}天: {name}',
+    'trainingDayBtn': '训练日',
+    'restDayBtn': '休息日',
+    'trainingSeg': '训练',
+    'restSeg': '休息',
+
+    // ── Exercise summary ──
+    'exSummaryNoWt': '{sets}组 · {reps}次 · 未设置重量 · {scheme} +{inc} kg',
+    'exSummaryWt': '{sets}组 · {reps}次 · 起始 {weight} kg · {scheme} +{inc} kg',
+
+    // ── Starter program ──
+    'starterPPL': '推拉腿',
+    'pushDay': '推',
+    'pullDay': '拉',
+    'legsDay': '腿',
+    'restDayName': '休息',
+
+    // ── Templates ──
+    'trainingTemplates': '训练模板',
+    'noTemplatesYet': '暂无模板',
+    'nExercises': '{n}个动作',
+
+    // ── Rest timer ──
+    'restTimerTitle': '休息计时器',
+    'restTimerLabel': '休息',
+    'readyLabel': '就绪',
+    'setLabel': '设置',
+
+    // ── Calendar ──
+    'programsTip': '训练计划',
+    'todayLabel': '今天',
+    'monthLabel': '月',
   };
 
   String get(String key) {
     final map = locale == AppLocale.zh ? _zh : _en;
     return map[key] ?? _en[key] ?? key;
+  }
+
+  /// Interpolates named placeholders like {name} or {n} with values.
+  /// Example: format('trainingDaysCount', {'training': '3', 'rest': '1'})
+  String format(String key, Map<String, String> values) {
+    var text = get(key);
+    values.forEach((k, v) {
+      text = text.replaceAll('{$k}', v);
+    });
+    return text;
   }
 
   String exerciseName(String id, String zhName) {
@@ -395,5 +545,14 @@ class L10n {
   String bodyPartName(String zhName) {
     if (locale == AppLocale.zh) return zhName;
     return get('bp_$zhName') != 'bp_$zhName' ? get('bp_$zhName') : zhName;
+  }
+
+  String shortDate(DateTime date) {
+    switch (locale) {
+      case AppLocale.zh:
+        return '${date.month}月${date.day}日';
+      case AppLocale.en:
+        return DateFormat.MMMd('en_US').format(date);
+    }
   }
 }

@@ -137,7 +137,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
             Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
             const Spacer(),
             IconButton(
-              tooltip: 'Programs',
+              tooltip: l10n.get('programsTip'),
               icon: const Icon(Icons.assignment_outlined),
               onPressed: () => context.push('/home/programs'),
             ),
@@ -150,7 +150,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                 });
                 ref.read(selectedDateProvider.notifier).state = today;
               },
-              text: 'Today',
+              text: l10n.get('todayLabel'),
             ),
           ],
         ),
@@ -168,8 +168,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                     firstDay: DateTime(2020),
                     lastDay: DateTime(2030),
                     focusedDay: _focusedDay,
-                    availableCalendarFormats: const {
-                      CalendarFormat.month: 'Month',
+                    availableCalendarFormats: {
+                      CalendarFormat.month: l10n.get('monthLabel'),
                     },
                     selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
                     onDaySelected: (d, f) {
