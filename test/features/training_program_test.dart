@@ -164,6 +164,8 @@ void main() {
           name: 'PPL',
           active: true,
           currentDayIndex: 2,
+          activatedAt: now,
+          activatedDayIndex: 1,
           advanceMode: AdvanceMode.manual,
           createdAt: now,
           updatedAt: now,
@@ -198,6 +200,8 @@ void main() {
         expect(restored.name, 'PPL');
         expect(restored.active, true);
         expect(restored.currentDayIndex, 2);
+        expect(restored.activatedAt, now);
+        expect(restored.activatedDayIndex, 1);
         expect(restored.advanceMode, AdvanceMode.manual);
 
         expect(restored.days.length, 2);
@@ -229,6 +233,8 @@ void main() {
       expect(program.advanceMode, AdvanceMode.auto);
       expect(program.active, false);
       expect(program.currentDayIndex, 0);
+      expect(program.activatedAt, isNull);
+      expect(program.activatedDayIndex, 0);
       expect(program.days, isEmpty);
     });
 
@@ -256,6 +262,25 @@ void main() {
       expect(updated.currentDayIndex, 1);
       expect(updated.active, true);
       expect(updated.id, 'prog1');
+    });
+
+    test('copyWith can update activation metadata', () {
+      final activatedAt = DateTime(2025, 6, 2, 12);
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        createdAt: now,
+        updatedAt: now,
+      );
+      final updated = program.copyWith(
+        active: true,
+        activatedAt: activatedAt,
+        activatedDayIndex: 2,
+      );
+      expect(updated.active, true);
+      expect(updated.activatedAt, activatedAt);
+      expect(updated.activatedDayIndex, 2);
     });
 
     test('supports "train 3, rest 1" cycle', () {
@@ -291,6 +316,103 @@ void main() {
       expect(advanced2.days[advanced2.currentDayIndex].name, 'Rest');
       expect(advanced2.days[advanced2.currentDayIndex].kind, DayKind.rest);
     });
+
+    test('programDayForDate projects from activation day without drift', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        currentDayIndex: 3,
+        activatedAt: DateTime(2025, 6, 1, 15),
+        activatedDayIndex: 1,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+          ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+          ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+        ],
+      );
+
+      expect(program.programDayForDate(DateTime(2025, 5, 31)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 1))?.name, 'Pull');
+      expect(program.programDayForDate(DateTime(2025, 6, 2))?.name, 'Legs');
+      expect(program.programDayForDate(DateTime(2025, 6, 3))?.name, 'Rest');
+      expect(program.programDayForDate(DateTime(2025, 6, 4))?.name, 'Push');
+    });
+
+    test('programDayForDate returns null for inactive or empty programs', () {
+      final inactive = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: false,
+        activatedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        days: [ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training)],
+      );
+      final empty = TrainingProgram(
+        id: 'prog2',
+        userId: 'user1',
+        name: 'Empty',
+        active: true,
+        activatedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+      expect(inactive.programDayForDate(now), isNull);
+      expect(empty.programDayForDate(now), isNull);
+    });
+
+    test('programDayForDate normalizes activated day index', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'Two day',
+        active: true,
+        activatedAt: now,
+        activatedDayIndex: 5,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Train', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Rest', kind: DayKind.rest),
+        ],
+      );
+      expect(program.programDayForDate(now)?.name, 'Rest');
+      expect(
+        program.programDayForDate(now.add(const Duration(days: 1)))?.name,
+        'Train',
+      );
+    });
+
+    test(
+      'programDayForDate uses current day index for migrated active data',
+      () {
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'Migrated',
+          active: true,
+          currentDayIndex: 2,
+          createdAt: DateTime(2025, 5, 1),
+          updatedAt: DateTime(2025, 6, 1),
+          days: [
+            ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+            ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+            ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+            ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+          ],
+        );
+
+        expect(program.activatedAt, isNull);
+        expect(program.programDayForDate(DateTime(2025, 6, 1))?.name, 'Legs');
+        expect(program.programDayForDate(DateTime(2025, 6, 2))?.name, 'Rest');
+      },
+    );
 
     test('advanceToNextDay wraps through training and rest days', () {
       final program = TrainingProgram(
@@ -351,6 +473,30 @@ void main() {
       final updated = program.removeDayAt(0, removedAt: now);
       expect(updated.currentDayIndex, 1);
       expect(updated.currentDay?.id, 'd3');
+    });
+
+    test('removeDayAt keeps activated day stable when deleting before it', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        currentDayIndex: 2,
+        activatedAt: now,
+        activatedDayIndex: 2,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+          ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+          ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+        ],
+      );
+
+      final updated = program.removeDayAt(0, removedAt: now);
+      expect(updated.currentDayIndex, 1);
+      expect(updated.activatedDayIndex, 1);
+      expect(updated.days[updated.activatedDayIndex].id, 'd3');
     });
 
     test(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../../../data/models/workout_log.dart';
+import '../../../data/models/training_program.dart';
 
 import '../../../data/repositories/app_database.dart';
 
@@ -109,6 +110,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
     final cycleTemplate = ref.watch(nutritionCycleProvider);
     final cycleStartDate = ref.watch(nutritionStartDateProvider);
     final dietCache = ref.watch(dietCacheProvider);
+    final activeProgram = ref.watch(activeTrainingProgramProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final logCache = ref.watch(workoutLogCacheProvider);
     final dk = _selectedDay != null
@@ -207,14 +209,23 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                         );
                         final hasDiet = (dietCache[dateKey] ?? []).isNotEmpty;
                         final hasCycle = cycleTemplate != null;
-                        if (!hasWorkout && !hasDiet && !hasCycle) return null;
+                        final programDay = activeProgram?.programDayForDate(d);
+                        final hasProgramDay = programDay != null;
+                        if (!hasWorkout &&
+                            !hasDiet &&
+                            !hasCycle &&
+                            !hasProgramDay) {
+                          return null;
+                        }
                         // Only render cycle markers on or after plan start
                         if (hasCycle) {
                           final startDate = cycleStartDate ?? DateTime.now();
                           final dayIdx = d.difference(startDate).inDays;
                           if (dayIdx < 0) {
                             // Before plan start: hide cycle, show dots only if workout/diet
-                            if (!hasWorkout && !hasDiet) return null;
+                            if (!hasWorkout && !hasDiet && !hasProgramDay) {
+                              return null;
+                            }
                             return Positioned(
                               bottom: 1,
                               child: Container(
@@ -257,6 +268,11 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                                           shape: BoxShape.circle,
                                         ),
                                       ),
+                                    if ((hasWorkout || hasDiet) &&
+                                        hasProgramDay)
+                                      const SizedBox(width: 2),
+                                    if (programDay != null)
+                                      _ProgramDayMarker(day: programDay),
                                   ],
                                 ),
                               ),
@@ -292,7 +308,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                                       shape: BoxShape.circle,
                                     ),
                                   ),
-                                if (hasWorkout && (hasDiet || hasCycle))
+                                if (hasWorkout &&
+                                    (hasDiet || hasCycle || hasProgramDay))
                                   const SizedBox(width: 2),
                                 if (hasDiet)
                                   Container(
@@ -303,7 +320,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                                       shape: BoxShape.circle,
                                     ),
                                   ),
-                                if (hasDiet && hasCycle)
+                                if (hasDiet && (hasCycle || hasProgramDay))
                                   const SizedBox(width: 2),
                                 if (hasCycle)
                                   Builder(
@@ -336,6 +353,10 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                                       );
                                     },
                                   ),
+                                if (hasCycle && hasProgramDay)
+                                  const SizedBox(width: 2),
+                                if (programDay != null)
+                                  _ProgramDayMarker(day: programDay),
                               ],
                             ),
                           ),
@@ -596,6 +617,22 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProgramDayMarker extends StatelessWidget {
+  final ProgramDay day;
+
+  const _ProgramDayMarker({required this.day});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRest = day.kind == DayKind.rest;
+    return Icon(
+      isRest ? Icons.hotel_outlined : Icons.fitness_center,
+      size: 11,
+      color: isRest ? Colors.blueGrey : Colors.deepPurple,
     );
   }
 }

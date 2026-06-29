@@ -172,15 +172,27 @@ class AppDatabase {
   List<TrainingProgram> _normalizeActiveTrainingPrograms(
     List<TrainingProgram> programs,
   ) {
+    final now = DateTime.now();
     var foundActive = false;
     return programs.map((program) {
       if (!program.active) return program;
       if (!foundActive) {
         foundActive = true;
-        return program;
+        return _withActivationMetadata(program, now);
       }
       return program.copyWith(active: false);
     }).toList();
+  }
+
+  TrainingProgram _withActivationMetadata(
+    TrainingProgram program,
+    DateTime activatedAt,
+  ) {
+    if (!program.active || program.activatedAt != null) return program;
+    return program.copyWith(
+      activatedAt: activatedAt,
+      activatedDayIndex: program.normalizedCurrentDayIndex,
+    );
   }
 
   Future<void> saveTrainingPrograms(
@@ -205,11 +217,12 @@ class AppDatabase {
     } else {
       programs.add(program);
     }
+    final now = DateTime.now();
     final normalized = program.active
         ? programs
               .map(
                 (p) => p.id == program.id
-                    ? p.copyWith(active: true)
+                    ? _withActivationMetadata(p.copyWith(active: true), now)
                     : p.copyWith(active: false),
               )
               .toList()
@@ -237,8 +250,21 @@ class AppDatabase {
   Future<void> setActiveTrainingProgram(String userId, String programId) async {
     final programs = await getTrainingPrograms(userId);
     if (!programs.any((p) => p.id == programId)) return;
+    final now = DateTime.now();
     for (int i = 0; i < programs.length; i++) {
-      programs[i] = programs[i].copyWith(active: programs[i].id == programId);
+      final program = programs[i];
+      final activating = program.id == programId;
+      final updated = program.copyWith(
+        active: activating,
+        activatedAt: activating ? now : program.activatedAt,
+        activatedDayIndex: activating
+            ? program.normalizedCurrentDayIndex
+            : program.activatedDayIndex,
+        updatedAt: activating ? now : program.updatedAt,
+      );
+      programs[i] = activating
+          ? _withActivationMetadata(updated, now)
+          : updated;
     }
     await saveTrainingPrograms(userId, programs);
   }

@@ -217,6 +217,8 @@ class TrainingProgram {
   final List<ProgramDay> days;
   final bool active;
   final int currentDayIndex;
+  final DateTime? activatedAt;
+  final int activatedDayIndex;
   final AdvanceMode advanceMode;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -228,6 +230,8 @@ class TrainingProgram {
     this.days = const [],
     this.active = false,
     this.currentDayIndex = 0,
+    this.activatedAt,
+    this.activatedDayIndex = 0,
     this.advanceMode = AdvanceMode.auto,
     required this.createdAt,
     required this.updatedAt,
@@ -245,6 +249,10 @@ class TrainingProgram {
             : const [],
         active: json['active'] as bool? ?? false,
         currentDayIndex: json['currentDayIndex'] as int? ?? 0,
+        activatedAt: json['activatedAt'] != null
+            ? DateTime.parse(json['activatedAt'] as String)
+            : null,
+        activatedDayIndex: json['activatedDayIndex'] as int? ?? 0,
         advanceMode: _advanceModeFromString(json['advanceMode'] as String?),
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'] as String)
@@ -261,6 +269,8 @@ class TrainingProgram {
     'days': days.map((d) => d.toJson()).toList(),
     'active': active,
     'currentDayIndex': currentDayIndex,
+    'activatedAt': activatedAt?.toIso8601String(),
+    'activatedDayIndex': activatedDayIndex,
     'advanceMode': advanceMode.name,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
@@ -274,6 +284,24 @@ class TrainingProgram {
   ProgramDay? get currentDay {
     if (days.isEmpty) return null;
     return days[normalizedCurrentDayIndex];
+  }
+
+  int get normalizedActivatedDayIndex {
+    if (days.isEmpty) return 0;
+    return activatedDayIndex % days.length;
+  }
+
+  ProgramDay? programDayForDate(DateTime date) {
+    if (!active || days.isEmpty) return null;
+    final start = _dateOnly(activatedAt ?? updatedAt);
+    final startIndex = activatedAt == null
+        ? normalizedCurrentDayIndex
+        : normalizedActivatedDayIndex;
+    final target = _dateOnly(date);
+    final offset = target.difference(start).inDays;
+    if (offset < 0) return null;
+    final index = (startIndex + offset) % days.length;
+    return days[index];
   }
 
   TrainingProgram advanceToNextDay({DateTime? advancedAt}) {
@@ -300,9 +328,22 @@ class TrainingProgram {
       }
     }
 
+    final normalizedActivated = normalizedActivatedDayIndex;
+    var nextActivatedIndex = 0;
+    if (nextDays.isNotEmpty) {
+      if (index < normalizedActivated) {
+        nextActivatedIndex = normalizedActivated - 1;
+      } else {
+        nextActivatedIndex = normalizedActivated
+            .clamp(0, nextDays.length - 1)
+            .toInt();
+      }
+    }
+
     return copyWith(
       days: nextDays,
       currentDayIndex: nextIndex,
+      activatedDayIndex: nextActivatedIndex,
       updatedAt: removedAt ?? DateTime.now(),
     );
   }
@@ -314,6 +355,8 @@ class TrainingProgram {
     List<ProgramDay>? days,
     bool? active,
     int? currentDayIndex,
+    DateTime? activatedAt,
+    int? activatedDayIndex,
     AdvanceMode? advanceMode,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -324,11 +367,16 @@ class TrainingProgram {
     days: days ?? this.days,
     active: active ?? this.active,
     currentDayIndex: currentDayIndex ?? this.currentDayIndex,
+    activatedAt: activatedAt ?? this.activatedAt,
+    activatedDayIndex: activatedDayIndex ?? this.activatedDayIndex,
     advanceMode: advanceMode ?? this.advanceMode,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
 }
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime.utc(value.year, value.month, value.day);
 
 TrainingProgram? activeTrainingProgramForUser(
   List<TrainingProgram> programs,

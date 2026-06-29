@@ -97,11 +97,14 @@ class _TrainingProgramsScreenState
     if (userId.isEmpty) return;
     final existing = ref.read(trainingProgramsProvider).valueOrNull ?? [];
     final now = DateTime.now();
+    final active = !existing.any((p) => p.active);
     final program = TrainingProgram(
       id: _newId(),
       userId: userId,
       name: l10n.get('starterPPL'),
-      active: !existing.any((p) => p.active),
+      active: active,
+      activatedAt: active ? now : null,
+      activatedDayIndex: 0,
       createdAt: now,
       updatedAt: now,
       days: [
