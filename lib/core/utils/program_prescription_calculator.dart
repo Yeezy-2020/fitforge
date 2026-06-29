@@ -58,6 +58,15 @@ class ProgramPrescriptionCalculator {
           programId,
           programDayId,
         );
+      case ProgressionSchemeType.fixedLoad:
+        return _fixedLoad(programExercise, lastLog, programId, programDayId);
+      case ProgressionSchemeType.linearPeriodization:
+        return _linearPeriodization(
+          programExercise,
+          lastLog,
+          programId,
+          programDayId,
+        );
       case ProgressionSchemeType.periodized:
         return _periodized(programExercise, lastLog, programId, programDayId);
     }
@@ -113,6 +122,43 @@ class ProgramPrescriptionCalculator {
       reps: _clampRepsToRange(lastLog.reps, ex),
       weightKg: _clampWeight(lastLog.weightKg + scheme.weightIncrementKg),
       reason: '+${scheme.weightIncrementKg} kg from last time',
+    );
+  }
+
+  WorkoutPrescription _fixedLoad(
+    ProgramExercise ex,
+    WorkoutLog lastLog,
+    String programId,
+    String programDayId,
+  ) {
+    return WorkoutPrescription(
+      programId: programId,
+      programDayId: programDayId,
+      programExerciseId: ex.id,
+      exerciseId: ex.exerciseId,
+      sets: _clampSets(lastLog.sets),
+      reps: _clampRepsToRange(lastLog.reps, ex),
+      weightKg: _clampWeight(lastLog.weightKg),
+      reason: 'Keep load and reps from last time',
+    );
+  }
+
+  WorkoutPrescription _linearPeriodization(
+    ProgramExercise ex,
+    WorkoutLog lastLog,
+    String programId,
+    String programDayId,
+  ) {
+    const percent = 2.5;
+    return WorkoutPrescription(
+      programId: programId,
+      programDayId: programDayId,
+      programExerciseId: ex.id,
+      exerciseId: ex.exerciseId,
+      sets: _clampSets(lastLog.sets),
+      reps: _clampRepsToRange(lastLog.reps - 1, ex),
+      weightKg: _clampWeight(lastLog.weightKg * (1 + percent / 100)),
+      reason: '+$percent% load and -1 rep for linear periodization',
     );
   }
 

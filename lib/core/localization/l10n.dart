@@ -250,7 +250,10 @@ class L10n {
     'progressionOpt': 'Progression',
     'progDouble': 'Double progression',
     'progLinear': 'Linear weight',
+    'progFixedLoad': 'Fixed load',
+    'progLinearPeriodization': 'Linear periodization',
     'progPeriodized': 'Periodized',
+    'linearPeriodizationHint': 'Weekly +2.5% load and -1 target rep.',
     'invalidConfig': 'Enter valid sets, reps, weight, and increment.',
     'trainingDaysCount': '{training} training days, {rest} rest days',
     'currentDayN': 'Day {n}',
@@ -265,6 +268,14 @@ class L10n {
         '{sets} sets · {reps} reps · Weight not set · {scheme} +{inc} kg',
     'exSummaryWt':
         '{sets} sets · {reps} reps · Start {weight} kg · {scheme} +{inc} kg',
+    'exSummaryFixedNoWt':
+        '{sets} sets · {reps} reps · Weight not set · {scheme}',
+    'exSummaryFixedWt':
+        '{sets} sets · {reps} reps · Start {weight} kg · {scheme}',
+    'exSummaryLinearPeriodizationNoWt':
+        '{sets} sets · {reps} reps · Weight not set · {scheme} +{percent}% / -1 rep',
+    'exSummaryLinearPeriodizationWt':
+        '{sets} sets · {reps} reps · Start {weight} kg · {scheme} +{percent}% / -1 rep',
 
     // ── Starter program ──
     'starterPPL': 'PPL',
@@ -491,7 +502,10 @@ class L10n {
     'progressionOpt': '进阶方式',
     'progDouble': '双进阶',
     'progLinear': '线性加重',
+    'progFixedLoad': '固定负荷',
+    'progLinearPeriodization': '线性周期',
     'progPeriodized': '周期化',
+    'linearPeriodizationHint': '每周重量 +2.5%，目标次数 -1。',
     'invalidConfig': '请输入有效的组数、次数、重量和增量。',
     'trainingDaysCount': '{training}个训练日，{rest}个休息日',
     'currentDayN': '第{n}天',
@@ -504,6 +518,12 @@ class L10n {
     // ── Exercise summary ──
     'exSummaryNoWt': '{sets}组 · {reps}次 · 未设置重量 · {scheme} +{inc} kg',
     'exSummaryWt': '{sets}组 · {reps}次 · 起始 {weight} kg · {scheme} +{inc} kg',
+    'exSummaryFixedNoWt': '{sets}组 · {reps}次 · 未设置重量 · {scheme}',
+    'exSummaryFixedWt': '{sets}组 · {reps}次 · 起始 {weight} kg · {scheme}',
+    'exSummaryLinearPeriodizationNoWt':
+        '{sets}组 · {reps}次 · 未设置重量 · {scheme} +{percent}% / -1次',
+    'exSummaryLinearPeriodizationWt':
+        '{sets}组 · {reps}次 · 起始 {weight} kg · {scheme} +{percent}% / -1次',
 
     // ── Starter program ──
     'starterPPL': '推拉腿',

@@ -596,24 +596,7 @@ class _ProgramExerciseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = exercise.progressionScheme;
-    final schemeLabel = _progressionSchemeLabel(scheme.type, l10n);
-    final reps = '${exercise.minReps}-${exercise.maxReps}';
-    final increment = scheme.weightIncrementKg.toStringAsFixed(1);
-    final subtitle = exercise.startingWeightKg > 0
-        ? l10n.format('exSummaryWt', {
-            'sets': exercise.targetSets.toString(),
-            'reps': reps,
-            'weight': exercise.startingWeightKg.toStringAsFixed(1),
-            'scheme': schemeLabel,
-            'inc': increment,
-          })
-        : l10n.format('exSummaryNoWt', {
-            'sets': exercise.targetSets.toString(),
-            'reps': reps,
-            'scheme': schemeLabel,
-            'inc': increment,
-          });
+    final subtitle = _programExerciseSubtitle(exercise, l10n);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
@@ -864,74 +847,75 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     return AlertDialog(
       title: Text(widget.title, overflow: TextOverflow.ellipsis),
       content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _numberField(_setsCtrl, widget.l10n.get('sets')),
+        child: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _numberFieldWrap([
+                _numberField(_setsCtrl, widget.l10n.get('sets')),
+                _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
+                _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
+              ]),
+              const SizedBox(height: 12),
+              _numberFieldWrap([
+                _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
+                _numberField(_incrementCtrl, widget.l10n.get('incrementKg')),
+              ]),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<ProgressionSchemeType>(
+                initialValue: _type,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: widget.l10n.get('progressionOpt'),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _numberField(
-                    _weightCtrl,
-                    widget.l10n.get('startWeightKg'),
+                items: [
+                  DropdownMenuItem(
+                    value: ProgressionSchemeType.doubleProgression,
+                    child: Text(widget.l10n.get('progDouble')),
+                  ),
+                  DropdownMenuItem(
+                    value: ProgressionSchemeType.linearWeight,
+                    child: Text(widget.l10n.get('progLinear')),
+                  ),
+                  DropdownMenuItem(
+                    value: ProgressionSchemeType.fixedLoad,
+                    child: Text(widget.l10n.get('progFixedLoad')),
+                  ),
+                  DropdownMenuItem(
+                    value: ProgressionSchemeType.linearPeriodization,
+                    child: Text(widget.l10n.get('progLinearPeriodization')),
+                  ),
+                  DropdownMenuItem(
+                    value: ProgressionSchemeType.periodized,
+                    child: Text(widget.l10n.get('progPeriodized')),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _type = value);
+                },
+              ),
+              if (_type == ProgressionSchemeType.linearPeriodization) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    widget.l10n.get('linearPeriodizationHint'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _numberField(
-                    _incrementCtrl,
-                    widget.l10n.get('incrementKg'),
-                  ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<ProgressionSchemeType>(
-              initialValue: _type,
-              decoration: InputDecoration(
-                labelText: widget.l10n.get('progressionOpt'),
-              ),
-              items: [
-                DropdownMenuItem(
-                  value: ProgressionSchemeType.doubleProgression,
-                  child: Text(widget.l10n.get('progDouble')),
-                ),
-                DropdownMenuItem(
-                  value: ProgressionSchemeType.linearWeight,
-                  child: Text(widget.l10n.get('progLinear')),
-                ),
-                DropdownMenuItem(
-                  value: ProgressionSchemeType.periodized,
-                  child: Text(widget.l10n.get('progPeriodized')),
-                ),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _type = value);
-              },
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
             ],
-          ],
+          ),
         ),
       ),
       actions: [
@@ -944,11 +928,44 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     );
   }
 
+  Widget _numberFieldWrap(List<Widget> fields) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        var columns = fields.length > 3 ? 3 : fields.length;
+        if (width < 420 && columns > 2) columns = 2;
+        if (width < 292) columns = 1;
+        final fieldWidth = (width - (8 * (columns - 1))) / columns;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 12,
+          children: [
+            for (final field in fields)
+              SizedBox(width: fieldWidth, child: field),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _numberField(TextEditingController controller, String label) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(labelText: label),
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.visible,
+          style: theme.textTheme.labelMedium,
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(isDense: true),
+        ),
+      ],
     );
   }
 
@@ -983,6 +1000,9 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
         progressionScheme: widget.exercise.progressionScheme.copyWith(
           type: _type,
           weightIncrementKg: increment,
+          percentIncrement: _type == ProgressionSchemeType.linearPeriodization
+              ? 2.5
+              : widget.exercise.progressionScheme.percentIncrement,
         ),
       ),
     );
@@ -995,10 +1015,39 @@ String _exerciseName(String id, List<Exercise> exercises, bool isEnglish) {
   return exercise.displayName(isEnglish);
 }
 
+String _programExerciseSubtitle(ProgramExercise exercise, L10n l10n) {
+  final scheme = exercise.progressionScheme;
+  final schemeLabel = _progressionSchemeLabel(scheme.type, l10n);
+  final reps = '${exercise.minReps}-${exercise.maxReps}';
+  final values = {
+    'sets': exercise.targetSets.toString(),
+    'reps': reps,
+    'weight': exercise.startingWeightKg.toStringAsFixed(1),
+    'scheme': schemeLabel,
+    'inc': scheme.weightIncrementKg.toStringAsFixed(1),
+    'percent': '2.5',
+  };
+
+  final key = switch (scheme.type) {
+    ProgressionSchemeType.fixedLoad =>
+      exercise.startingWeightKg > 0 ? 'exSummaryFixedWt' : 'exSummaryFixedNoWt',
+    ProgressionSchemeType.linearPeriodization =>
+      exercise.startingWeightKg > 0
+          ? 'exSummaryLinearPeriodizationWt'
+          : 'exSummaryLinearPeriodizationNoWt',
+    _ => exercise.startingWeightKg > 0 ? 'exSummaryWt' : 'exSummaryNoWt',
+  };
+  return l10n.format(key, values);
+}
+
 String _progressionSchemeLabel(ProgressionSchemeType type, L10n l10n) {
   return switch (type) {
     ProgressionSchemeType.doubleProgression => l10n.get('progDouble'),
     ProgressionSchemeType.linearWeight => l10n.get('progLinear'),
+    ProgressionSchemeType.fixedLoad => l10n.get('progFixedLoad'),
+    ProgressionSchemeType.linearPeriodization => l10n.get(
+      'progLinearPeriodization',
+    ),
     ProgressionSchemeType.periodized => l10n.get('progPeriodized'),
   };
 }

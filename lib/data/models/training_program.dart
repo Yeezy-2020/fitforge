@@ -1,4 +1,10 @@
-enum ProgressionSchemeType { doubleProgression, linearWeight, periodized }
+enum ProgressionSchemeType {
+  doubleProgression,
+  linearWeight,
+  fixedLoad,
+  linearPeriodization,
+  periodized,
+}
 
 enum DayKind { training, rest }
 
@@ -10,6 +16,10 @@ ProgressionSchemeType _progressionSchemeTypeFromString(String? value) {
       return ProgressionSchemeType.doubleProgression;
     case 'linearWeight':
       return ProgressionSchemeType.linearWeight;
+    case 'fixedLoad':
+      return ProgressionSchemeType.fixedLoad;
+    case 'linearPeriodization':
+      return ProgressionSchemeType.linearPeriodization;
     case 'periodized':
       return ProgressionSchemeType.periodized;
     default:

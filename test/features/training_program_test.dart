@@ -32,6 +32,17 @@ void main() {
       expect(scheme.type, ProgressionSchemeType.doubleProgression);
     });
 
+    test('new progression type strings roundtrip', () {
+      expect(
+        ProgressionScheme.fromJson({'type': 'fixedLoad'}).type,
+        ProgressionSchemeType.fixedLoad,
+      );
+      expect(
+        ProgressionScheme.fromJson({'type': 'linearPeriodization'}).type,
+        ProgressionSchemeType.linearPeriodization,
+      );
+    });
+
     test('missing numeric fields use defaults', () {
       final scheme = ProgressionScheme.fromJson({'type': 'linearWeight'});
       expect(scheme.weightIncrementKg, 2.5);
@@ -481,6 +492,7 @@ void main() {
       int maxReps = 12,
       double startingWeightKg = 40,
       double increment = 2.5,
+      double percentIncrement = 2.5,
     }) => ProgramExercise(
       id: 'pe1',
       exerciseId: 'ex_bench_press',
@@ -491,6 +503,7 @@ void main() {
       progressionScheme: ProgressionScheme(
         type: type,
         weightIncrementKg: increment,
+        percentIncrement: percentIncrement,
       ),
     );
 
@@ -564,6 +577,47 @@ void main() {
       );
       expect(rx.reps, 8);
       expect(rx.weightKg, 85);
+    });
+
+    test('fixed load keeps previous load and clamps reps into range', () {
+      final rx = calculate(
+        exercise(
+          type: ProgressionSchemeType.fixedLoad,
+          minReps: 8,
+          maxReps: 12,
+        ),
+        log(reps: 14, weightKg: 80),
+      );
+      expect(rx.reps, 12);
+      expect(rx.weightKg, 80);
+    });
+
+    test('linear periodization adds 2.5 percent load and drops one rep', () {
+      final rx = calculate(
+        exercise(
+          type: ProgressionSchemeType.linearPeriodization,
+          minReps: 8,
+          maxReps: 12,
+          percentIncrement: 5.0,
+        ),
+        log(reps: 10, weightKg: 100),
+      );
+      expect(rx.reps, 9);
+      expect(rx.weightKg, 102.5);
+    });
+
+    test('linear periodization does not drop below minimum reps', () {
+      final rx = calculate(
+        exercise(
+          type: ProgressionSchemeType.linearPeriodization,
+          minReps: 8,
+          maxReps: 12,
+          percentIncrement: 2.5,
+        ),
+        log(reps: 8, weightKg: 100),
+      );
+      expect(rx.reps, 8);
+      expect(rx.weightKg, 102.5);
     });
 
     test('no previous log normalizes invalid starting rep range', () {
