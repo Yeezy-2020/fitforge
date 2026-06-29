@@ -325,6 +325,8 @@ class ProgramDetailScreen extends ConsumerWidget {
         exercises: exercises,
         l10n: l10n,
         isEnglish: l10n.locale == AppLocale.en,
+        onCreateExercise: (exercise) =>
+            ref.read(exerciseListProvider.notifier).addExercise(exercise),
       ),
     );
     if (selected == null) return;
@@ -637,15 +639,19 @@ class _ProgramExerciseTile extends StatelessWidget {
   }
 }
 
+enum _ExercisePickerMode { existing, custom }
+
 class _ExercisePickerDialog extends StatefulWidget {
   final List<Exercise> exercises;
   final L10n l10n;
   final bool isEnglish;
+  final Future<void> Function(Exercise exercise) onCreateExercise;
 
   const _ExercisePickerDialog({
     required this.exercises,
     required this.l10n,
     required this.isEnglish,
+    required this.onCreateExercise,
   });
 
   @override
@@ -653,7 +659,17 @@ class _ExercisePickerDialog extends StatefulWidget {
 }
 
 class _ExercisePickerDialogState extends State<_ExercisePickerDialog> {
+  final _customNameCtrl = TextEditingController();
   String _query = '';
+  _ExercisePickerMode _mode = _ExercisePickerMode.existing;
+  String? _error;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _customNameCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -671,43 +687,125 @@ class _ExercisePickerDialogState extends State<_ExercisePickerDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              autofocus: true,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                labelText: widget.l10n.get('searchEx'),
-              ),
-              onChanged: (value) => setState(() => _query = value),
+            SegmentedButton<_ExercisePickerMode>(
+              segments: [
+                ButtonSegment(
+                  value: _ExercisePickerMode.existing,
+                  icon: const Icon(Icons.list_alt),
+                  label: Text(widget.l10n.get('chooseExistingExercise')),
+                ),
+                ButtonSegment(
+                  value: _ExercisePickerMode.custom,
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: Text(widget.l10n.get('createCustomExercise')),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: _saving
+                  ? null
+                  : (value) => setState(() {
+                      _mode = value.first;
+                      _error = null;
+                    }),
             ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: filtered.length,
-                itemBuilder: (ctx, i) {
-                  final exercise = filtered[i];
-                  return ListTile(
-                    title: Text(exercise.displayName(widget.isEnglish)),
-                    subtitle: Text(
-                      widget.isEnglish
-                          ? (exercise.bodyPartEn ?? exercise.bodyPart)
-                          : exercise.bodyPart,
-                    ),
-                    onTap: () => Navigator.pop(ctx, exercise),
-                  );
-                },
+            const SizedBox(height: 12),
+            if (_mode == _ExercisePickerMode.existing) ...[
+              TextField(
+                autofocus: true,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  labelText: widget.l10n.get('searchEx'),
+                ),
+                onChanged: (value) => setState(() => _query = value),
               ),
-            ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: filtered.isEmpty
+                    ? Center(child: Text(widget.l10n.get('noExercises')))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        itemBuilder: (ctx, i) {
+                          final exercise = filtered[i];
+                          return ListTile(
+                            title: Text(exercise.displayName(widget.isEnglish)),
+                            subtitle: Text(
+                              exercise.displayBodyPart(widget.isEnglish),
+                            ),
+                            onTap: () => Navigator.pop(ctx, exercise),
+                          );
+                        },
+                      ),
+              ),
+            ] else ...[
+              TextField(
+                controller: _customNameCtrl,
+                autofocus: true,
+                enabled: !_saving,
+                decoration: InputDecoration(
+                  labelText: widget.l10n.get('exerciseName'),
+                  helperText: widget.l10n.get('customExercisePlanHelp'),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _saving ? null : () => Navigator.pop(context),
           child: Text(widget.l10n.get('cancel')),
         ),
+        if (_mode == _ExercisePickerMode.custom)
+          FilledButton(
+            onPressed: _saving ? null : _createCustomExercise,
+            child: _saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(widget.l10n.get('add')),
+          ),
       ],
     );
+  }
+
+  Future<void> _createCustomExercise() async {
+    final name = _customNameCtrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = widget.l10n.get('pleaseEnterValid'));
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final exercise = Exercise(
+      id: 'custom_${_newProgramId()}',
+      name: name,
+      bodyPart: '自定义',
+      bodyPartEn: 'Custom',
+    );
+    try {
+      await widget.onCreateExercise(exercise);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = widget.l10n.get('failedToLoad');
+      });
+      return;
+    }
+    if (!mounted) return;
+    Navigator.pop(context, exercise);
   }
 }
 
