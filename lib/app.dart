@@ -17,6 +17,7 @@ import 'features/body/body_screen.dart';
 import 'core/services/sync_service.dart';
 import 'providers/app_providers.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/metallic_surface.dart';
 import 'providers/settings_providers.dart';
 import 'core/localization/l10n.dart';
 
@@ -114,6 +115,8 @@ class _FitForgeAppState extends ConsumerState<FitForgeApp>
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       routerConfig: router,
+      builder: (context, child) =>
+          MetallicBackground(child: child ?? const SizedBox.shrink()),
       locale: appLocale == AppLocale.zh
           ? const Locale('zh', 'CN')
           : const Locale('en', 'US'),
