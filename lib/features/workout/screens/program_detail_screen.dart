@@ -862,8 +862,11 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     final progressionHintKey = _progressionHintKey(_type);
     final fields = <Widget>[
       _numberField(_setsCtrl, widget.l10n.get('sets')),
-      _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
-      _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
+      if (_usesRepRange(_type)) ...[
+        _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
+        _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
+      ] else
+        _numberField(_maxRepsCtrl, widget.l10n.get('targetReps')),
       _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
       if (_usesWeightIncrement(_type))
         _numberField(_incrementCtrl, widget.l10n.get('incrementKg')),
@@ -991,6 +994,8 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
             setState(() {
               final wasIncrementScheme = _usesWeightIncrement(_type);
               final isIncrementScheme = _usesWeightIncrement(value);
+              final wasRepRange = _usesRepRange(_type);
+              final isRepRange = _usesRepRange(value);
               _type = value;
               if (!wasIncrementScheme && isIncrementScheme) {
                 final current = double.tryParse(_incrementCtrl.text);
@@ -998,11 +1003,23 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
                   _incrementCtrl.text = '2.5';
                 }
               }
+              if (!wasRepRange && isRepRange) {
+                _restoreRepRangeFromTarget();
+              }
             });
           },
         ),
       ],
     );
+  }
+
+  void _restoreRepRangeFromTarget() {
+    final target = int.tryParse(_maxRepsCtrl.text);
+    if (target == null || target < 2) return;
+    final currentMin = int.tryParse(_minRepsCtrl.text);
+    if (currentMin == null || currentMin >= target) {
+      _minRepsCtrl.text = (target - 4).clamp(1, target - 1).toString();
+    }
   }
 
   Widget _numberField(TextEditingController controller, String label) {
@@ -1029,20 +1046,22 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
   void _save() {
     final sets = int.tryParse(_setsCtrl.text);
     final minReps = int.tryParse(_minRepsCtrl.text);
-    final maxReps = int.tryParse(_maxRepsCtrl.text);
+    final targetReps = int.tryParse(_maxRepsCtrl.text);
     final weight = double.tryParse(_weightCtrl.text);
+    final usesRepRange = _usesRepRange(_type);
     final usesIncrement = _usesWeightIncrement(_type);
     final increment = usesIncrement
         ? double.tryParse(_incrementCtrl.text)
         : 0.0;
     if (sets == null ||
-        minReps == null ||
-        maxReps == null ||
+        targetReps == null ||
         weight == null ||
+        (usesRepRange && minReps == null) ||
         (usesIncrement && increment == null) ||
         sets < 1 ||
-        minReps < 1 ||
-        maxReps < minReps ||
+        targetReps < 1 ||
+        (usesRepRange && minReps! < 1) ||
+        (usesRepRange && targetReps < minReps!) ||
         weight < 0 ||
         (usesIncrement && increment! < 0)) {
       setState(() {
@@ -1050,12 +1069,13 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
       });
       return;
     }
+    final reps = _repsForSave(_type, minReps, targetReps);
     Navigator.pop(
       context,
       widget.exercise.copyWith(
         targetSets: sets,
-        minReps: minReps,
-        maxReps: maxReps,
+        minReps: reps.min,
+        maxReps: reps.max,
         startingWeightKg: weight,
         progressionScheme: widget.exercise.progressionScheme.copyWith(
           type: _type,
@@ -1067,6 +1087,25 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
       ),
     );
   }
+}
+
+bool _usesRepRange(ProgressionSchemeType type) {
+  return type == ProgressionSchemeType.doubleProgression;
+}
+
+({int min, int max}) _repsForSave(
+  ProgressionSchemeType type,
+  int? minReps,
+  int targetReps,
+) {
+  if (_usesRepRange(type)) return (min: minReps!, max: targetReps);
+  if (type == ProgressionSchemeType.linearPeriodization) {
+    return (
+      min: (targetReps - 4).clamp(1, targetReps).toInt(),
+      max: targetReps,
+    );
+  }
+  return (min: targetReps, max: targetReps);
 }
 
 bool _usesWeightIncrement(ProgressionSchemeType type) {
@@ -1098,7 +1137,7 @@ String _exerciseName(String id, List<Exercise> exercises, bool isEnglish) {
 String _programExerciseSubtitle(ProgramExercise exercise, L10n l10n) {
   final scheme = exercise.progressionScheme;
   final schemeLabel = _progressionSchemeLabel(scheme.type, l10n);
-  final reps = '${exercise.minReps}-${exercise.maxReps}';
+  final reps = _repsSummary(exercise);
   final values = {
     'sets': exercise.targetSets.toString(),
     'reps': reps,
@@ -1118,6 +1157,13 @@ String _programExerciseSubtitle(ProgramExercise exercise, L10n l10n) {
     _ => exercise.startingWeightKg > 0 ? 'exSummaryWt' : 'exSummaryNoWt',
   };
   return l10n.format(key, values);
+}
+
+String _repsSummary(ProgramExercise exercise) {
+  if (_usesRepRange(exercise.progressionScheme.type)) {
+    return '${exercise.minReps}-${exercise.maxReps}';
+  }
+  return exercise.maxReps.toString();
 }
 
 String _progressionSchemeLabel(ProgressionSchemeType type, L10n l10n) {

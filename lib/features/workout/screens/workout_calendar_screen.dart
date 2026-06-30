@@ -48,7 +48,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
     required VoidCallback onTap,
     required String text,
     required String tooltip,
-    required IconData icon,
+    IconData? icon,
     bool prominent = false,
     double maxWidth = 132,
   }) {
@@ -97,8 +97,10 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 17, color: foreground),
-                const SizedBox(width: 6),
+                if (icon != null) ...[
+                  Icon(icon, size: 17, color: foreground),
+                  const SizedBox(width: 6),
+                ],
                 Flexible(
                   child: Text(
                     text,
@@ -145,13 +147,6 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
-        actions: [
-          IconButton(
-            tooltip: l10n.get('programsTip'),
-            icon: const Icon(Icons.assignment_outlined),
-            onPressed: () => context.push('/home/programs'),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Padding(
@@ -172,6 +167,13 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                     prominent: true,
                     maxWidth: double.infinity,
                   ),
+                ),
+                const SizedBox(width: 10),
+                _topActionButton(
+                  onTap: () => context.push('/home/programs'),
+                  text: l10n.get('programsTip'),
+                  tooltip: l10n.get('trainingPrograms'),
+                  maxWidth: 118,
                 ),
                 const SizedBox(width: 10),
                 _topActionButton(
