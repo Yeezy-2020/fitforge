@@ -863,8 +863,8 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     final fields = <Widget>[
       _numberField(_setsCtrl, widget.l10n.get('sets')),
       if (_usesRepRange(_type)) ...[
-        _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
-        _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
+        _numberField(_minRepsCtrl, widget.l10n.get('startReps')),
+        _numberField(_maxRepsCtrl, widget.l10n.get('targetReps')),
       ] else
         _numberField(_maxRepsCtrl, widget.l10n.get('targetReps')),
       _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
@@ -1120,10 +1120,10 @@ bool _usesWeightIncrement(ProgressionSchemeType type) {
 
 String? _progressionHintKey(ProgressionSchemeType type) {
   return switch (type) {
+    ProgressionSchemeType.doubleProgression => 'doubleProgressionHint',
     ProgressionSchemeType.fixedLoad => 'fixedLoadHint',
     ProgressionSchemeType.linearPeriodization => 'linearPeriodizationHint',
     ProgressionSchemeType.periodized => 'periodizedHint',
-    ProgressionSchemeType.doubleProgression ||
     ProgressionSchemeType.linearWeight => null,
   };
 }

@@ -250,6 +250,7 @@ class L10n {
     'editEx': 'Edit',
     'removeEx': 'Remove',
     'searchEx': 'Search',
+    'startReps': 'Start reps',
     'startWeightKg': 'Start kg',
     'incrementKg': 'Add kg',
     'progressionOpt': 'Progression',
@@ -258,6 +259,8 @@ class L10n {
     'progFixedLoad': 'Fixed load',
     'progLinearPeriodization': 'Linear periodization',
     'progPeriodized': 'Periodized',
+    'doubleProgressionHint':
+        'When target reps are reached, the next suggestion adds weight and returns to start reps.',
     'fixedLoadHint': 'Keeps the last load and reps. No kg increment is needed.',
     'linearPeriodizationHint': 'Weekly +2.5% load and -1 target rep.',
     'periodizedHint':
@@ -510,6 +513,7 @@ class L10n {
     'editEx': '编辑',
     'removeEx': '移除',
     'searchEx': '搜索',
+    'startReps': '起始次数',
     'startWeightKg': '起始重量(kg)',
     'incrementKg': '增量(kg)',
     'progressionOpt': '进阶方式',
@@ -518,6 +522,7 @@ class L10n {
     'progFixedLoad': '固定负荷',
     'progLinearPeriodization': '线性周期',
     'progPeriodized': '周期化',
+    'doubleProgressionHint': '达到目标次数后，下次建议会增加重量，并回到起始次数。',
     'fixedLoadHint': '保持上次重量和次数，不需要设置重量增量。',
     'linearPeriodizationHint': '每周重量 +2.5%，目标次数 -1。',
     'periodizedHint': '当前会沿用上次训练值，后续再加入自定义周期编排。',
