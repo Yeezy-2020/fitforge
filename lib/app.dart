@@ -21,6 +21,10 @@ import 'core/theme/metallic_surface.dart';
 import 'providers/settings_providers.dart';
 import 'core/localization/l10n.dart';
 
+Page<void> _instantPage(GoRouterState state, Widget child) {
+  return NoTransitionPage<void>(key: state.pageKey, child: child);
+}
+
 final _routerProvider = Provider<GoRouter>((ref) {
   final userId = ref.watch(currentUserIdProvider);
   return GoRouter(
@@ -36,25 +40,46 @@ final _routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
-      GoRoute(path: '/onboarding', builder: (c, s) => const OnboardingScreen()),
-      GoRoute(path: '/paywall', builder: (c, s) => const PaywallScreen()),
-      GoRoute(path: '/profile', builder: (c, s) => const ProfileScreen()),
-      GoRoute(path: '/settings', builder: (c, s) => const SettingsScreen()),
-      GoRoute(path: '/body', builder: (c, s) => const BodyScreen()),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (c, s) => _instantPage(s, const LoginScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        pageBuilder: (c, s) => _instantPage(s, const OnboardingScreen()),
+      ),
+      GoRoute(
+        path: '/paywall',
+        pageBuilder: (c, s) => _instantPage(s, const PaywallScreen()),
+      ),
+      GoRoute(
+        path: '/profile',
+        pageBuilder: (c, s) => _instantPage(s, const ProfileScreen()),
+      ),
+      GoRoute(
+        path: '/settings',
+        pageBuilder: (c, s) => _instantPage(s, const SettingsScreen()),
+      ),
+      GoRoute(
+        path: '/body',
+        pageBuilder: (c, s) => _instantPage(s, const BodyScreen()),
+      ),
       GoRoute(
         path: '/home',
-        builder: (c, s) => const HomeShell(child: SizedBox.shrink()),
+        pageBuilder: (c, s) =>
+            _instantPage(s, const HomeShell(child: SizedBox.shrink())),
         routes: [
           GoRoute(
             path: 'day/:date',
-            builder: (c, s) => WorkoutDayScreen(
-              date: DateTime.parse(s.pathParameters['date']!),
+            pageBuilder: (c, s) => _instantPage(
+              s,
+              WorkoutDayScreen(date: DateTime.parse(s.pathParameters['date']!)),
             ),
           ),
           GoRoute(
             path: 'programs',
-            builder: (c, s) => const TrainingProgramsScreen(),
+            pageBuilder: (c, s) =>
+                _instantPage(s, const TrainingProgramsScreen()),
           ),
         ],
       ),

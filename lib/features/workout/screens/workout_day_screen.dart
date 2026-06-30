@@ -10,6 +10,7 @@ import '../../../data/repositories/app_database.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import '../../../core/localization/l10n.dart';
+import '../../../core/navigation/instant_page_route.dart';
 import '../../../core/utils/progression_calculator.dart';
 import '../../../data/models/workout_template.dart';
 import '../../workout/screens/templates_screen.dart';
@@ -425,7 +426,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             onPressed: () async {
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const TemplatesScreen()),
+                instantPageRoute(const TemplatesScreen()),
               );
               if (result != null && result is WorkoutTemplate) {
                 for (final ex in result.exercises) {
@@ -1012,9 +1013,7 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ExerciseDetailScreen(exercise: widget.exercise),
-          ),
+          instantPageRoute(ExerciseDetailScreen(exercise: widget.exercise)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(10),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/l10n.dart';
+import '../../../core/navigation/instant_page_route.dart';
 import '../../../data/models/exercise.dart';
 import '../../../data/models/training_program.dart';
 import '../../../providers/app_providers.dart';
@@ -86,9 +87,9 @@ class _TrainingProgramsScreenState
   }
 
   void _openDetail(String id) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ProgramDetailScreen(programId: id)),
-    );
+    Navigator.of(
+      context,
+    ).push(instantPageRoute(ProgramDetailScreen(programId: id)));
   }
 
   Future<void> _createStarter() async {

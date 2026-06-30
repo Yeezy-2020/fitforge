@@ -162,6 +162,98 @@ class MetallicPanel extends StatelessWidget {
   }
 }
 
+class MetallicReadingSurface extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? margin;
+  final EdgeInsetsGeometry? padding;
+  final double borderRadius;
+
+  const MetallicReadingSurface({
+    super.key,
+    required this.child,
+    this.margin,
+    this.padding,
+    this.borderRadius = 22,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const lightScheme = ColorScheme(
+      brightness: Brightness.light,
+      primary: Color(0xFF56616D),
+      onPrimary: Colors.white,
+      primaryContainer: Color(0xFFDCE1E6),
+      onPrimaryContainer: Color(0xFF11161B),
+      secondary: Color(0xFF7D8792),
+      onSecondary: Colors.white,
+      secondaryContainer: Color(0xFFE7EAEE),
+      onSecondaryContainer: Color(0xFF171C21),
+      tertiary: Color(0xFF8D7F6F),
+      onTertiary: Colors.white,
+      tertiaryContainer: Color(0xFFF3E5D4),
+      onTertiaryContainer: Color(0xFF2D2217),
+      error: Color(0xFFBA1A1A),
+      onError: Colors.white,
+      errorContainer: Color(0xFFFFDAD6),
+      onErrorContainer: Color(0xFF410002),
+      surface: Color(0xFFFAFBFC),
+      onSurface: Color(0xFF171C20),
+      surfaceContainerHighest: Color(0xFFE9EDF1),
+      onSurfaceVariant: Color(0xFF434A51),
+      outline: Color(0xFF747C85),
+      outlineVariant: Color(0xFFD6DCE2),
+      shadow: Colors.black,
+      scrim: Colors.black,
+      inverseSurface: Color(0xFF2C3136),
+      onInverseSurface: Color(0xFFF1F3F5),
+      inversePrimary: Color(0xFFC9CED3),
+    );
+    final theme = Theme.of(context);
+    final radius = BorderRadius.circular(borderRadius);
+    return Theme(
+      data: theme.copyWith(
+        brightness: Brightness.light,
+        colorScheme: lightScheme,
+        textTheme: theme.textTheme.apply(
+          bodyColor: lightScheme.onSurface,
+          displayColor: lightScheme.onSurface,
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFFE1E6EC)),
+          ),
+        ),
+      ),
+      child: Container(
+        margin: margin,
+        padding: padding,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: const Color(0xFFE1E6EC)),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFFFFF), Color(0xFFF7F9FB), Color(0xFFEFF3F6)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 26,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
 class _MetallicWavePainter extends CustomPainter {
   final MetallicPalette palette;
   final bool isDark;

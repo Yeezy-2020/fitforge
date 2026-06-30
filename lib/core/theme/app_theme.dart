@@ -105,8 +105,8 @@ class AppTheme {
       useMaterial3: true,
       brightness: scheme.brightness,
       colorScheme: scheme,
-      scaffoldBackgroundColor: Colors.transparent,
-      canvasColor: Colors.transparent,
+      scaffoldBackgroundColor: scheme.surface,
+      canvasColor: scheme.surface,
       extensions: [metallic],
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
