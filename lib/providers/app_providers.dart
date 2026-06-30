@@ -381,8 +381,10 @@ final activeTrainingProgramProvider = Provider<TrainingProgram?>((ref) {
 });
 
 /// Computes a list of [WorkoutPrescription]s for the given [date] based on
-/// the active training program's current day. Returns empty list when there
-/// is no active program, no current day, a rest day, or an empty day.
+/// the active training program. Today's workout follows the completion-based
+/// current day; other dates use the activation-date calendar projection.
+/// Returns empty list when there is no active program, no current day, a rest
+/// day, or an empty day.
 /// Uses local-only storage — does not connect Supabase.
 final workoutPrescriptionsForDateProvider =
     FutureProvider.family<List<WorkoutPrescription>, DateTime>((
@@ -394,7 +396,7 @@ final workoutPrescriptionsForDateProvider =
       if (program == null) return [];
       if (program.userId != userId) return [];
 
-      final day = program.currentDay;
+      final day = program.programDayForWorkoutDate(date);
       if (day == null || day.kind == DayKind.rest) return [];
 
       final prescriptions = <WorkoutPrescription>[];

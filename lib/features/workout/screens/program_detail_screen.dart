@@ -330,9 +330,10 @@ class ProgramDetailScreen extends ConsumerWidget {
       ),
     );
     if (selected == null) return;
+    if (!context.mounted) return;
     final days = [...program.days];
     final day = days[dayIndex];
-    final exercise = ProgramExercise(
+    final defaultExercise = ProgramExercise(
       id: _newProgramId(),
       exerciseId: selected.id,
       targetSets: 3,
@@ -345,7 +346,21 @@ class ProgramDetailScreen extends ConsumerWidget {
       ),
       sortOrder: day.exercises.length,
     );
-    days[dayIndex] = day.copyWith(exercises: [...day.exercises, exercise]);
+    final configured = await showDialog<ProgramExercise>(
+      context: context,
+      builder: (ctx) => _ProgramExerciseDialog(
+        exercise: defaultExercise,
+        title: selected.displayName(l10n.locale == AppLocale.en),
+        l10n: l10n,
+      ),
+    );
+    if (configured == null) return;
+    days[dayIndex] = day.copyWith(
+      exercises: [
+        ...day.exercises,
+        configured.copyWith(sortOrder: day.exercises.length),
+      ],
+    );
     await _saveProgram(
       ref,
       program.copyWith(days: days, updatedAt: DateTime.now()),
@@ -844,6 +859,17 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final progressionHintKey = _progressionHintKey(_type);
+    final fields = <Widget>[
+      _numberField(_setsCtrl, widget.l10n.get('sets')),
+      _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
+      _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
+      _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
+      if (_usesWeightIncrement(_type))
+        _numberField(_incrementCtrl, widget.l10n.get('incrementKg')),
+      _progressionField(),
+    ];
+
     return AlertDialog(
       title: Text(widget.title, overflow: TextOverflow.ellipsis),
       content: SingleChildScrollView(
@@ -852,20 +878,13 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _fieldWrap([
-                _numberField(_setsCtrl, widget.l10n.get('sets')),
-                _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
-                _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
-                _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
-                _numberField(_incrementCtrl, widget.l10n.get('incrementKg')),
-                _progressionField(),
-              ]),
-              if (_type == ProgressionSchemeType.linearPeriodization) ...[
+              _fieldWrap(fields),
+              if (progressionHintKey != null) ...[
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    widget.l10n.get('linearPeriodizationHint'),
+                    widget.l10n.get(progressionHintKey),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.outline,
                     ),
@@ -968,7 +987,18 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
             ),
           ],
           onChanged: (value) {
-            if (value != null) setState(() => _type = value);
+            if (value == null) return;
+            setState(() {
+              final wasIncrementScheme = _usesWeightIncrement(_type);
+              final isIncrementScheme = _usesWeightIncrement(value);
+              _type = value;
+              if (!wasIncrementScheme && isIncrementScheme) {
+                final current = double.tryParse(_incrementCtrl.text);
+                if (current == null || current <= 0) {
+                  _incrementCtrl.text = '2.5';
+                }
+              }
+            });
           },
         ),
       ],
@@ -1001,17 +1031,20 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     final minReps = int.tryParse(_minRepsCtrl.text);
     final maxReps = int.tryParse(_maxRepsCtrl.text);
     final weight = double.tryParse(_weightCtrl.text);
-    final increment = double.tryParse(_incrementCtrl.text);
+    final usesIncrement = _usesWeightIncrement(_type);
+    final increment = usesIncrement
+        ? double.tryParse(_incrementCtrl.text)
+        : 0.0;
     if (sets == null ||
         minReps == null ||
         maxReps == null ||
         weight == null ||
-        increment == null ||
+        (usesIncrement && increment == null) ||
         sets < 1 ||
         minReps < 1 ||
         maxReps < minReps ||
         weight < 0 ||
-        increment < 0) {
+        (usesIncrement && increment! < 0)) {
       setState(() {
         _error = widget.l10n.get('invalidConfig');
       });
@@ -1026,7 +1059,7 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
         startingWeightKg: weight,
         progressionScheme: widget.exercise.progressionScheme.copyWith(
           type: _type,
-          weightIncrementKg: increment,
+          weightIncrementKg: usesIncrement ? increment! : 0.0,
           percentIncrement: _type == ProgressionSchemeType.linearPeriodization
               ? 2.5
               : widget.exercise.progressionScheme.percentIncrement,
@@ -1034,6 +1067,26 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
       ),
     );
   }
+}
+
+bool _usesWeightIncrement(ProgressionSchemeType type) {
+  return switch (type) {
+    ProgressionSchemeType.doubleProgression ||
+    ProgressionSchemeType.linearWeight => true,
+    ProgressionSchemeType.fixedLoad ||
+    ProgressionSchemeType.linearPeriodization ||
+    ProgressionSchemeType.periodized => false,
+  };
+}
+
+String? _progressionHintKey(ProgressionSchemeType type) {
+  return switch (type) {
+    ProgressionSchemeType.fixedLoad => 'fixedLoadHint',
+    ProgressionSchemeType.linearPeriodization => 'linearPeriodizationHint',
+    ProgressionSchemeType.periodized => 'periodizedHint',
+    ProgressionSchemeType.doubleProgression ||
+    ProgressionSchemeType.linearWeight => null,
+  };
 }
 
 String _exerciseName(String id, List<Exercise> exercises, bool isEnglish) {

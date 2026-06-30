@@ -574,7 +574,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     List<Exercise> exercises,
     WeightUnit trainUnit,
   ) {
-    final day = program.currentDay;
+    final day = program.programDayForWorkoutDate(widget.date);
     if (day == null) return const SizedBox.shrink();
 
     String exName(String id) {
@@ -643,7 +643,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                 const Icon(Icons.fitness_center, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  '${l10n.get('todayProgram')}: ${day.name}',
+                  '${l10n.get(_selectedDateIsToday ? 'todayProgram' : 'scheduledProgram')}: ${day.name}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,

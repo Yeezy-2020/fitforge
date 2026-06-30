@@ -343,6 +343,48 @@ void main() {
       expect(program.programDayForDate(DateTime(2025, 6, 4))?.name, 'Push');
     });
 
+    test(
+      'programDayForWorkoutDate uses completion state today and projection otherwise',
+      () {
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          active: true,
+          currentDayIndex: 3,
+          activatedAt: DateTime(2025, 6, 1, 15),
+          activatedDayIndex: 1,
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+            ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+            ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+            ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+          ],
+        );
+
+        expect(
+          program
+              .programDayForWorkoutDate(
+                DateTime(2025, 6, 1),
+                today: DateTime(2025, 6, 1, 20),
+              )
+              ?.name,
+          'Rest',
+        );
+        expect(
+          program
+              .programDayForWorkoutDate(
+                DateTime(2025, 6, 2),
+                today: DateTime(2025, 6, 1, 20),
+              )
+              ?.name,
+          'Legs',
+        );
+      },
+    );
+
     test('programDayForDate returns null for inactive or empty programs', () {
       final inactive = TrainingProgram(
         id: 'prog1',

@@ -304,6 +304,14 @@ class TrainingProgram {
     return days[index];
   }
 
+  ProgramDay? programDayForWorkoutDate(DateTime date, {DateTime? today}) {
+    if (!active || days.isEmpty) return null;
+    final target = _dateOnly(date);
+    final currentDate = _dateOnly(today ?? DateTime.now());
+    if (target == currentDate) return currentDay;
+    return programDayForDate(date);
+  }
+
   TrainingProgram advanceToNextDay({DateTime? advancedAt}) {
     final nextIndex = days.isEmpty
         ? 0

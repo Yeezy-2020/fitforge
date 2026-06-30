@@ -41,10 +41,27 @@ class _TrainingProgramsScreenState
       appBar: AppBar(
         title: Text(l10n.get('trainingPrograms')),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
+            tooltip: l10n.get('createProgram'),
             icon: const Icon(Icons.add),
-            tooltip: l10n.get('createStarterProgram'),
-            onPressed: _createStarter,
+            onSelected: (value) {
+              switch (value) {
+                case 'blank':
+                  _createBlank();
+                case 'starter':
+                  _createStarter();
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'blank',
+                child: Text(l10n.get('createBlankProgram')),
+              ),
+              PopupMenuItem(
+                value: 'starter',
+                child: Text(l10n.get('createStarterProgram')),
+              ),
+            ],
           ),
         ],
       ),
@@ -61,6 +78,12 @@ class _TrainingProgramsScreenState
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     icon: const Icon(Icons.add),
+                    label: Text(l10n.get('createBlankProgram')),
+                    onPressed: _createBlank,
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    icon: const Icon(Icons.auto_awesome),
                     label: Text(l10n.get('createStarterProgramLong')),
                     onPressed: _createStarter,
                   ),
@@ -90,6 +113,59 @@ class _TrainingProgramsScreenState
     Navigator.of(
       context,
     ).push(instantPageRoute(ProgramDetailScreen(programId: id)));
+  }
+
+  Future<void> _createBlank() async {
+    final l10n = ref.read(l10nProvider);
+    final userId = ref.read(currentUserIdProvider);
+    if (userId.isEmpty) return;
+
+    final controller = TextEditingController(
+      text: l10n.get('blankProgramName'),
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.get('createBlankProgram')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: l10n.get('programName')),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.get('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(l10n.get('createProgram')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty) return;
+
+    final existing = ref.read(trainingProgramsProvider).valueOrNull ?? [];
+    final now = DateTime.now();
+    final active = !existing.any((p) => p.active);
+    final program = TrainingProgram(
+      id: _newId(),
+      userId: userId,
+      name: name,
+      active: active,
+      activatedAt: active ? now : null,
+      activatedDayIndex: 0,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await ref.read(trainingProgramsProvider.notifier).save(program);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.get('blankProgramCreated'))));
+    _openDetail(program.id);
   }
 
   Future<void> _createStarter() async {
@@ -183,6 +259,7 @@ class _TrainingProgramsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.get('starterProgramCreated'))),
       );
+      _openDetail(program.id);
     }
   }
 
