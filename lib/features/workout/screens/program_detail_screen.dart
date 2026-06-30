@@ -852,51 +852,16 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _numberFieldWrap([
+              _fieldWrap([
                 _numberField(_setsCtrl, widget.l10n.get('sets')),
                 _numberField(_minRepsCtrl, widget.l10n.get('minReps')),
                 _numberField(_maxRepsCtrl, widget.l10n.get('maxReps')),
-              ]),
-              const SizedBox(height: 12),
-              _numberFieldWrap([
                 _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
                 _numberField(_incrementCtrl, widget.l10n.get('incrementKg')),
+                _progressionField(),
               ]),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<ProgressionSchemeType>(
-                initialValue: _type,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: widget.l10n.get('progressionOpt'),
-                ),
-                items: [
-                  DropdownMenuItem(
-                    value: ProgressionSchemeType.doubleProgression,
-                    child: Text(widget.l10n.get('progDouble')),
-                  ),
-                  DropdownMenuItem(
-                    value: ProgressionSchemeType.linearWeight,
-                    child: Text(widget.l10n.get('progLinear')),
-                  ),
-                  DropdownMenuItem(
-                    value: ProgressionSchemeType.fixedLoad,
-                    child: Text(widget.l10n.get('progFixedLoad')),
-                  ),
-                  DropdownMenuItem(
-                    value: ProgressionSchemeType.linearPeriodization,
-                    child: Text(widget.l10n.get('progLinearPeriodization')),
-                  ),
-                  DropdownMenuItem(
-                    value: ProgressionSchemeType.periodized,
-                    child: Text(widget.l10n.get('progPeriodized')),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) setState(() => _type = value);
-                },
-              ),
               if (_type == ProgressionSchemeType.linearPeriodization) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -928,7 +893,7 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     );
   }
 
-  Widget _numberFieldWrap(List<Widget> fields) {
+  Widget _fieldWrap(List<Widget> fields) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -945,6 +910,68 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
           ],
         );
       },
+    );
+  }
+
+  Widget _progressionField() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.l10n.get('progressionOpt'),
+          maxLines: 2,
+          overflow: TextOverflow.visible,
+          style: theme.textTheme.labelMedium,
+        ),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<ProgressionSchemeType>(
+          initialValue: _type,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(16),
+          decoration: const InputDecoration(isDense: true),
+          items: [
+            DropdownMenuItem(
+              value: ProgressionSchemeType.doubleProgression,
+              child: Text(
+                widget.l10n.get('progDouble'),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            DropdownMenuItem(
+              value: ProgressionSchemeType.linearWeight,
+              child: Text(
+                widget.l10n.get('progLinear'),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            DropdownMenuItem(
+              value: ProgressionSchemeType.fixedLoad,
+              child: Text(
+                widget.l10n.get('progFixedLoad'),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            DropdownMenuItem(
+              value: ProgressionSchemeType.linearPeriodization,
+              child: Text(
+                widget.l10n.get('progLinearPeriodization'),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            DropdownMenuItem(
+              value: ProgressionSchemeType.periodized,
+              child: Text(
+                widget.l10n.get('progPeriodized'),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+          onChanged: (value) {
+            if (value != null) setState(() => _type = value);
+          },
+        ),
+      ],
     );
   }
 
