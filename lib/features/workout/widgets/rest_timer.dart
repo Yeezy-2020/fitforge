@@ -141,13 +141,30 @@ class _RestTimerState extends ConsumerState<RestTimer>
     if (!widget.expanded) {
       return GestureDetector(
         onTap: widget.onToggle,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Center(
-            child: Text(
-              '${l10n.get('restTimerLabel')}: $timeLabel  ▴',
-              style: theme.textTheme.bodySmall,
+        onVerticalDragUpdate: (details) {
+          if (details.delta.dy < -8) widget.onToggle();
+        },
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            width: 64,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.keyboard_arrow_up_rounded,
+              color: theme.colorScheme.primary,
             ),
           ),
         ),
@@ -155,51 +172,95 @@ class _RestTimerState extends ConsumerState<RestTimer>
     }
 
     return Container(
-      padding: const EdgeInsets.all(12),
-      color: theme.colorScheme.surfaceContainerHighest,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           GestureDetector(
-            onTap: _showTimePicker,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border.all(width: 2, color: theme.colorScheme.primary),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                timeLabel,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
+            onTap: widget.onToggle,
+            onVerticalDragUpdate: (details) {
+              if (details.delta.dy > 8) widget.onToggle();
+            },
+            child: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 3,
+            child: GestureDetector(
+              onTap: _showTimePicker,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    width: 2,
+                    color: theme.colorScheme.primary,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  timeLabel,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
-          Text(
-            _running ? '${_remaining}s' : l10n.get('readyLabel'),
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: _remaining <= 10 && _running ? Colors.red : null,
+          const SizedBox(width: 10),
+          Flexible(
+            flex: 2,
+            child: Text(
+              _running ? '${_remaining}s' : l10n.get('readyLabel'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: _remaining <= 10 && _running ? Colors.red : null,
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           if (!_running)
             IconButton(
-              icon: const Icon(Icons.play_arrow, color: Colors.green, size: 32),
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.play_arrow, color: Colors.green, size: 30),
               onPressed: _start,
             )
           else
             IconButton(
-              icon: const Icon(Icons.pause, color: Colors.orange, size: 32),
+              constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.pause, color: Colors.orange, size: 30),
               onPressed: _pause,
             ),
-          IconButton(icon: const Icon(Icons.stop, size: 28), onPressed: _reset),
           IconButton(
-            icon: const Icon(Icons.keyboard_arrow_down),
-            onPressed: widget.onToggle,
+            constraints: const BoxConstraints.tightFor(width: 36, height: 38),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.stop, size: 26),
+            onPressed: _reset,
           ),
         ],
       ),

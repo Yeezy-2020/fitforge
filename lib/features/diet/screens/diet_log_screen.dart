@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../../../data/models/diet_log.dart';
 import '../../../data/models/food.dart';
 import '../../../core/localization/l10n.dart';
+import '../../../core/theme/metallic_surface.dart';
 import '../../../data/repositories/app_database.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
@@ -245,27 +246,33 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (totalKcal > 0 || totalProtein > 0)
-            _DailySummaryBar(
-              l10n: l10n,
-              calories: totalKcal,
-              protein: totalProtein,
-              carbs: totalCarbs,
-              fat: totalFat,
+      body: MetallicReadingSurface(
+        margin: const EdgeInsets.all(12),
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            if (totalKcal > 0 || totalProtein > 0)
+              _DailySummaryBar(
+                l10n: l10n,
+                calories: totalKcal,
+                protein: totalProtein,
+                carbs: totalCarbs,
+                fat: totalFat,
+              ),
+            Expanded(
+              child: logs.isEmpty
+                  ? Center(
+                      child: Text(
+                        l10n.get('noMeals'),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : _DietLogList(l10n: l10n, logs: logs, fmtGrams: fmtGrams),
             ),
-          Expanded(
-            child: logs.isEmpty
-                ? Center(
-                    child: Text(
-                      l10n.get('noMeals'),
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  )
-                : _DietLogList(l10n: l10n, logs: logs, fmtGrams: fmtGrams),
-          ),
-        ],
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddFoodSheet(context, selectedDate),
@@ -473,8 +480,20 @@ class _DailySummaryBar extends StatelessWidget {
     }
     final theme = Theme.of(context);
     return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -514,20 +533,21 @@ class _MiniStat extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       children: [
         Text(
           value,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
             color: color,
           ),
         ),
         Text(
           label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );

@@ -30,6 +30,11 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
   @override
   bool get wantKeepAlive => true;
 
+  double _calendarHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return screenHeight < 720 ? 330 : 360;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -39,59 +44,73 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
     ref.read(workoutCacheProvider.notifier).loadMonth(_focusedDay);
   }
 
-  Widget _pill({required VoidCallback onTap, required String text}) {
-    final c = Theme.of(context).colorScheme.primary;
+  Widget _topActionButton({
+    required VoidCallback onTap,
+    required String text,
+    required String tooltip,
+    required IconData icon,
+    bool prominent = false,
+    double maxWidth = 132,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final foreground = prominent ? scheme.onPrimary : scheme.primary;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: c.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(18),
+        splashColor: scheme.primary.withValues(alpha: 0.12),
         child: Container(
-          width: 130,
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          height: 36,
+          constraints: BoxConstraints(maxWidth: maxWidth, minWidth: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            border: Border.all(width: 2, color: c),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-              color: c,
+            border: Border.all(
+              color: prominent
+                  ? Colors.white.withValues(alpha: 0.42)
+                  : scheme.outlineVariant,
             ),
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: prominent
+                  ? [scheme.primary, scheme.primary.withValues(alpha: 0.82)]
+                  : [
+                      scheme.surface,
+                      scheme.surfaceContainerHighest.withValues(alpha: 0.74),
+                    ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: prominent ? 0.16 : 0.08),
+                blurRadius: prominent ? 16 : 10,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _todayBtn({required VoidCallback onTap, required String text}) {
-    final c = Theme.of(context).colorScheme.primary;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: c.withValues(alpha: 0.15),
-        child: Container(
-          width: 130,
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(width: 2, color: c),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-              color: c,
+          child: Tooltip(
+            message: tooltip,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 17, color: foreground),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -125,55 +144,79 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            _pill(
-              onTap: () {
-                final d = _selectedDay ?? DateTime.now();
-                context.push(
-                  '/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}',
-                );
-              },
-              text: l10n.get('logWorkout'),
+        title: Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
+        actions: [
+          IconButton(
+            tooltip: l10n.get('programsTip'),
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: () => context.push('/home/programs'),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _topActionButton(
+                    onTap: () {
+                      final d = _selectedDay ?? DateTime.now();
+                      context.push(
+                        '/home/day/${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}',
+                      );
+                    },
+                    text: l10n.get('logWorkout'),
+                    tooltip: l10n.get('logWorkout'),
+                    icon: Icons.add,
+                    prominent: true,
+                    maxWidth: double.infinity,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _topActionButton(
+                  onTap: () {
+                    final today = DateTime.now();
+                    setState(() {
+                      _focusedDay = today;
+                      _selectedDay = today;
+                    });
+                    ref.read(selectedDateProvider.notifier).state = today;
+                  },
+                  text: l10n.get('todayLabel'),
+                  tooltip: l10n.get('todayLabel'),
+                  icon: Icons.today_outlined,
+                  maxWidth: 112,
+                ),
+              ],
             ),
-            const Spacer(),
-            Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
-            const Spacer(),
-            IconButton(
-              tooltip: l10n.get('programsTip'),
-              icon: const Icon(Icons.assignment_outlined),
-              onPressed: () => context.push('/home/programs'),
-            ),
-            _todayBtn(
-              onTap: () {
-                final today = DateTime.now();
-                setState(() {
-                  _focusedDay = today;
-                  _selectedDay = today;
-                });
-                ref.read(selectedDateProvider.notifier).state = today;
-              },
-              text: l10n.get('todayLabel'),
-            ),
-          ],
+          ),
         ),
       ),
       floatingActionButton: null,
-      body: Column(
+      body: Stack(
         children: [
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            alignment: Alignment.topCenter,
-            child: _collapsed
-                ? const SizedBox.shrink()
-                : MetallicReadingSurface(
+          Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                height: _collapsed ? 0 : _calendarHeight(context),
+                clipBehavior: Clip.hardEdge,
+                decoration: const BoxDecoration(),
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  offset: _collapsed ? const Offset(0, -0.14) : Offset.zero,
+                  child: MetallicReadingSurface(
                     margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                     padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                     child: TableCalendar(
                       firstDay: DateTime(2020),
                       lastDay: DateTime(2030),
                       focusedDay: _focusedDay,
+                      rowHeight: 38,
+                      daysOfWeekHeight: 24,
                       availableCalendarFormats: {
                         CalendarFormat.month: l10n.get('monthLabel'),
                       },
@@ -429,119 +472,139 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                       ),
                     ),
                   ),
-          ),
-          GestureDetector(
-            onVerticalDragUpdate: (d) {
-              if (d.delta.dy < -10 && !_collapsed) {
-                setState(() => _collapsed = true);
-              }
-              if (d.delta.dy > 10 && _collapsed) {
-                setState(() => _collapsed = false);
-              }
-            },
-            onTap: () => setState(() => _collapsed = !_collapsed),
-            child: Container(
-              height: 24,
-              color: Colors.transparent,
-              child: Center(
+                ),
+              ),
+              GestureDetector(
+                onVerticalDragUpdate: (d) {
+                  if (d.delta.dy < -10 && !_collapsed) {
+                    setState(() => _collapsed = true);
+                  }
+                  if (d.delta.dy > 10 && _collapsed) {
+                    setState(() => _collapsed = false);
+                  }
+                },
+                onTap: () => setState(() => _collapsed = !_collapsed),
                 child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade400,
-                    borderRadius: BorderRadius.circular(2),
+                  height: 28,
+                  color: Colors.transparent,
+                  child: Center(
+                    child: AnimatedRotation(
+                      turns: _collapsed ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        size: 22,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: MetallicReadingSurface(
-              margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: _selectedDay == null
-                  ? Center(child: Text(l10n.get('selectBodyPart')))
-                  : logs.isEmpty
-                  ? Center(
-                      child: Text(
-                        l10n.get('noWorkout'),
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: const Color(0xFF6D7680),
-                        ),
-                      ),
-                    )
-                  : ReorderableListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      itemCount: logs.length,
-                      buildDefaultDragHandles: false,
-                      onReorder: (oldI, newI) {
-                        final list = List<WorkoutLog>.from(logs);
-                        if (newI > oldI) newI--;
-                        list.insert(newI, list.removeAt(oldI));
-                        ref
-                            .read(workoutLogCacheProvider.notifier)
-                            .loadDate(_selectedDay!);
-                      },
-                      proxyDecorator: (child, i, _) => Material(
-                        elevation: 4,
-                        borderRadius: BorderRadius.circular(12),
-                        child: child,
-                      ),
-                      itemBuilder: (context, i) {
-                        final log = logs[i];
-                        return Card(
-                          key: ValueKey(log.id),
-                          margin: const EdgeInsets.only(bottom: 6),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () => _edit(
-                              context,
-                              ref,
-                              log,
-                              exName(log.exerciseId),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  ReorderableDragStartListener(
-                                    index: i,
-                                    child: const Padding(
-                                      padding: EdgeInsets.only(right: 8),
-                                      child: Icon(
-                                        Icons.drag_handle,
-                                        size: 20,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      exName(log.exerciseId),
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${log.sets}×${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
+              Expanded(
+                child: MetallicReadingSurface(
+                  margin: EdgeInsets.fromLTRB(
+                    12,
+                    4,
+                    12,
+                    _timerExpanded ? 132 : 48,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: _selectedDay == null
+                      ? Center(child: Text(l10n.get('selectBodyPart')))
+                      : logs.isEmpty
+                      ? Center(
+                          child: Text(
+                            l10n.get('noWorkout'),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(color: const Color(0xFF6D7680)),
                           ),
-                        );
-                      },
-                    ),
-            ),
+                        )
+                      : ReorderableListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          itemCount: logs.length,
+                          buildDefaultDragHandles: false,
+                          onReorder: (oldI, newI) {
+                            final list = List<WorkoutLog>.from(logs);
+                            if (newI > oldI) newI--;
+                            list.insert(newI, list.removeAt(oldI));
+                            ref
+                                .read(workoutLogCacheProvider.notifier)
+                                .loadDate(_selectedDay!);
+                          },
+                          proxyDecorator: (child, i, _) => Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(12),
+                            child: child,
+                          ),
+                          itemBuilder: (context, i) {
+                            final log = logs[i];
+                            return Card(
+                              key: ValueKey(log.id),
+                              margin: const EdgeInsets.only(bottom: 6),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => _edit(
+                                  context,
+                                  ref,
+                                  log,
+                                  exName(log.exerciseId),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      ReorderableDragStartListener(
+                                        index: i,
+                                        child: const Padding(
+                                          padding: EdgeInsets.only(right: 8),
+                                          child: Icon(
+                                            Icons.drag_handle,
+                                            size: 20,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          exName(log.exerciseId),
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${log.sets}×${log.reps}  ${formatTrainingWeight(log.weightKg, trainUnit)}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ],
           ),
-          RestTimer(
-            expanded: _timerExpanded,
-            onToggle: () => setState(() => _timerExpanded = !_timerExpanded),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 8,
+            child: SafeArea(
+              top: false,
+              child: RestTimer(
+                expanded: _timerExpanded,
+                onToggle: () =>
+                    setState(() => _timerExpanded = !_timerExpanded),
+              ),
+            ),
           ),
         ],
       ),
