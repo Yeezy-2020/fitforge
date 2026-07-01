@@ -170,7 +170,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final userId = ref.read(currentUserIdProvider);
     final savedLogs = <WorkoutLog>[];
     final activeProgram = ref.read(activeTrainingProgramProvider);
-    final activeProgramDay = activeProgram?.currentDay;
+    final activeProgramDay = activeProgram?.isPausedOn(widget.date) == true
+        ? null
+        : activeProgram?.currentDay;
     final savedCurrentProgramExerciseIds = <String>{};
     for (final p in _pendingSets) {
       final log = WorkoutLog(

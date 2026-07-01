@@ -69,7 +69,16 @@ class ProgramDetailScreen extends ConsumerWidget {
           body: ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              _ProgramHeader(program: program, l10n: l10n),
+              _ProgramHeader(
+                program: program,
+                l10n: l10n,
+                onPause: program.active
+                    ? () => _pauseProgram(context, ref, program, l10n)
+                    : null,
+                onResume: program.active
+                    ? () => _resumeProgram(context, ref, program, l10n)
+                    : null,
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -164,6 +173,114 @@ class ProgramDetailScreen extends ConsumerWidget {
     await ref
         .read(trainingProgramsProvider.notifier)
         .save(program.copyWith(name: name, updatedAt: DateTime.now()));
+  }
+
+  static Future<void> _pauseProgram(
+    BuildContext context,
+    WidgetRef ref,
+    TrainingProgram program,
+    L10n l10n,
+  ) async {
+    final today = DateTime.now();
+    final start = await _pickPlanDate(
+      context,
+      l10n: l10n,
+      titleKey: 'pauseProgram',
+      helpKey: 'pauseProgramHelp',
+      todayKey: 'fromToday',
+      earlierKey: 'chooseEarlierDate',
+      pickerHelpKey: 'choosePauseStartDate',
+      firstDate: program.activatedAt ?? program.createdAt,
+      lastDate: today,
+    );
+    if (start == null) return;
+    await ref
+        .read(trainingProgramsProvider.notifier)
+        .save(program.pauseFrom(start, now: today));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.get('programPaused'))));
+  }
+
+  static Future<void> _resumeProgram(
+    BuildContext context,
+    WidgetRef ref,
+    TrainingProgram program,
+    L10n l10n,
+  ) async {
+    final today = DateTime.now();
+    final openPause = program.pausePeriods
+        .where((period) => period.endDate == null)
+        .lastOrNull;
+    final resume = await _pickPlanDate(
+      context,
+      l10n: l10n,
+      titleKey: 'resumeProgram',
+      helpKey: 'resumeProgramHelp',
+      todayKey: 'resumeToday',
+      earlierKey: 'resumeFromEarlierDate',
+      pickerHelpKey: 'chooseResumeDate',
+      firstDate:
+          openPause?.startDate ?? program.activatedAt ?? program.createdAt,
+      lastDate: today,
+    );
+    if (resume == null) return;
+    await ref
+        .read(trainingProgramsProvider.notifier)
+        .save(program.resumeFrom(resume, now: today));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.get('programResumed'))));
+  }
+
+  static Future<DateTime?> _pickPlanDate(
+    BuildContext context, {
+    required L10n l10n,
+    required String titleKey,
+    required String helpKey,
+    required String todayKey,
+    required String earlierKey,
+    required String pickerHelpKey,
+    required DateTime firstDate,
+    required DateTime lastDate,
+  }) async {
+    final useToday = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.get(titleKey)),
+        content: Text(l10n.get(helpKey)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.get('cancel')),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.get(earlierKey)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.get(todayKey)),
+          ),
+        ],
+      ),
+    );
+    if (useToday == null) return null;
+    final today = DateTime(lastDate.year, lastDate.month, lastDate.day);
+    if (useToday) return today;
+    if (!context.mounted) return null;
+    final first = DateTime(firstDate.year, firstDate.month, firstDate.day);
+    final picked = await showDatePicker(
+      context: context,
+      helpText: l10n.get(pickerHelpKey),
+      firstDate: first.isAfter(today) ? today : first,
+      lastDate: today,
+      initialDate: today,
+    );
+    if (picked == null) return null;
+    return DateTime(picked.year, picked.month, picked.day);
   }
 
   static Future<void> _addDay(
@@ -427,42 +544,95 @@ class ProgramDetailScreen extends ConsumerWidget {
 class _ProgramHeader extends StatelessWidget {
   final TrainingProgram program;
   final L10n l10n;
+  final VoidCallback? onPause;
+  final VoidCallback? onResume;
 
-  const _ProgramHeader({required this.program, required this.l10n});
+  const _ProgramHeader({
+    required this.program,
+    required this.l10n,
+    required this.onPause,
+    required this.onResume,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final trainingDays = program.days
         .where((d) => d.kind == DayKind.training)
         .length;
     final restDays = program.days.length - trainingDays;
+    final isPaused = program.isPausedNow();
+    final openPause = program.pausePeriods
+        .where((period) => period.endDate == null)
+        .lastOrNull;
+    final status = isPaused
+        ? l10n.format('pausedSince', {
+            'date': l10n.shortDate(openPause?.startDate ?? DateTime.now()),
+          })
+        : program.active
+        ? l10n.get('active')
+        : l10n.get('program');
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              program.active ? Icons.check_circle : Icons.assignment_outlined,
-              color: Theme.of(context).colorScheme.primary,
+            Row(
+              children: [
+                Icon(
+                  isPaused
+                      ? Icons.pause_circle_outline
+                      : program.active
+                      ? Icons.check_circle
+                      : Icons.assignment_outlined,
+                  color: isPaused
+                      ? theme.colorScheme.tertiary
+                      : theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (program.active)
+                  isPaused
+                      ? FilledButton.icon(
+                          onPressed: onResume,
+                          icon: const Icon(Icons.play_arrow, size: 18),
+                          label: Text(l10n.get('resumeProgram')),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: onPause,
+                          icon: const Icon(Icons.pause, size: 18),
+                          label: Text(l10n.get('pauseProgram')),
+                        ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                l10n.format('trainingDaysCount', {
-                  'training': trainingDays.toString(),
-                  'rest': restDays.toString(),
-                }),
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.format('trainingDaysCount', {
+                'training': trainingDays.toString(),
+                'rest': restDays.toString(),
+              }),
+              style: theme.textTheme.bodyMedium,
             ),
+            const SizedBox(height: 2),
             Text(
               l10n.format('currentDayN', {
                 'n': (program.normalizedCurrentDayIndex + 1).toString(),
               }),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
           ],
         ),

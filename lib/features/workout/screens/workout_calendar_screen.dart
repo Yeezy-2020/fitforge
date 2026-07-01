@@ -146,7 +146,7 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.get('training'), style: const TextStyle(fontSize: 16)),
+        toolbarHeight: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Padding(

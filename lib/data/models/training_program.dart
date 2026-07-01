@@ -210,6 +210,76 @@ class ProgramDay {
   );
 }
 
+class ProgramPausePeriod {
+  final DateTime startDate;
+  final DateTime? endDate;
+  final bool extendEndDate;
+
+  ProgramPausePeriod({
+    required DateTime startDate,
+    DateTime? endDate,
+    this.extendEndDate = true,
+  }) : startDate = _dateOnly(startDate),
+       endDate = endDate == null ? null : _dateOnly(endDate);
+
+  factory ProgramPausePeriod.fromJson(Map<String, dynamic> json) =>
+      ProgramPausePeriod(
+        startDate: DateTime.parse(json['startDate'] as String),
+        endDate: json['endDate'] != null
+            ? DateTime.parse(json['endDate'] as String)
+            : null,
+        extendEndDate: json['extendEndDate'] as bool? ?? true,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'startDate': _dateOnly(startDate).toIso8601String(),
+    'endDate': endDate == null ? null : _dateOnly(endDate!).toIso8601String(),
+    'extendEndDate': extendEndDate,
+  };
+
+  bool contains(DateTime date) {
+    final target = _dateOnly(date);
+    final start = _dateOnly(startDate);
+    final end = endDate == null ? null : _dateOnly(endDate!);
+    if (target.isBefore(start)) return false;
+    return end == null || target.isBefore(end);
+  }
+
+  int pausedDaysBefore(DateTime date) {
+    final target = _dateOnly(date);
+    final start = startDate;
+    if (!target.isAfter(start)) return 0;
+    final rawEnd = endDate == null ? target : endDate!;
+    final cappedEnd = rawEnd.isAfter(target) ? target : rawEnd;
+    if (!cappedEnd.isAfter(start)) return 0;
+    return cappedEnd.difference(start).inDays;
+  }
+
+  ProgramPausePeriod copyWith({
+    DateTime? startDate,
+    DateTime? endDate,
+    bool clearEndDate = false,
+    bool? extendEndDate,
+  }) => ProgramPausePeriod(
+    startDate: startDate ?? this.startDate,
+    endDate: clearEndDate ? null : endDate ?? this.endDate,
+    extendEndDate: extendEndDate ?? this.extendEndDate,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProgramPausePeriod &&
+          startDate == other.startDate &&
+          endDate == other.endDate &&
+          extendEndDate == other.extendEndDate;
+
+  @override
+  int get hashCode => Object.hash(startDate, endDate, extendEndDate);
+}
+
+typedef PausePeriod = ProgramPausePeriod;
+
 class TrainingProgram {
   final String id;
   final String userId;
@@ -220,6 +290,7 @@ class TrainingProgram {
   final DateTime? activatedAt;
   final int activatedDayIndex;
   final AdvanceMode advanceMode;
+  final List<ProgramPausePeriod> pausePeriods;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -233,6 +304,7 @@ class TrainingProgram {
     this.activatedAt,
     this.activatedDayIndex = 0,
     this.advanceMode = AdvanceMode.auto,
+    this.pausePeriods = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -254,6 +326,14 @@ class TrainingProgram {
             : null,
         activatedDayIndex: json['activatedDayIndex'] as int? ?? 0,
         advanceMode: _advanceModeFromString(json['advanceMode'] as String?),
+        pausePeriods: json['pausePeriods'] != null
+            ? (json['pausePeriods'] as List)
+                  .map(
+                    (p) =>
+                        ProgramPausePeriod.fromJson(p as Map<String, dynamic>),
+                  )
+                  .toList()
+            : const [],
         createdAt: json['createdAt'] != null
             ? DateTime.parse(json['createdAt'] as String)
             : DateTime.now(),
@@ -272,6 +352,7 @@ class TrainingProgram {
     'activatedAt': activatedAt?.toIso8601String(),
     'activatedDayIndex': activatedDayIndex,
     'advanceMode': advanceMode.name,
+    'pausePeriods': pausePeriods.map((p) => p.toJson()).toList(),
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -300,7 +381,11 @@ class TrainingProgram {
     final target = _dateOnly(date);
     final offset = target.difference(start).inDays;
     if (offset < 0) return null;
-    final index = (startIndex + offset) % days.length;
+    if (isPausedOn(target)) return null;
+    final pausedDays = _extendablePausedDaysBetween(start, target);
+    final activeOffset = offset - pausedDays;
+    if (activeOffset < 0) return null;
+    final index = (startIndex + activeOffset) % days.length;
     return days[index];
   }
 
@@ -308,8 +393,71 @@ class TrainingProgram {
     if (!active || days.isEmpty) return null;
     final target = _dateOnly(date);
     final currentDate = _dateOnly(today ?? DateTime.now());
+    if (isPausedOn(target)) return null;
     if (target == currentDate) return currentDay;
     return programDayForDate(date);
+  }
+
+  bool isPausedOn(DateTime date) =>
+      _mergePausePeriods(pausePeriods).any((period) => period.contains(date));
+
+  bool isPausedNow({DateTime? today}) => isPausedOn(today ?? DateTime.now());
+
+  TrainingProgram pauseFrom(
+    DateTime startDate, {
+    DateTime? now,
+    bool extendEndDate = true,
+  }) {
+    final programStart = _dateOnly(activatedAt ?? updatedAt);
+    final requestedStart = _dateOnly(startDate);
+    final effectiveStart = requestedStart.isBefore(programStart)
+        ? programStart
+        : requestedStart;
+    final currentPeriods = _mergePausePeriods(pausePeriods);
+    final nextPeriods = _mergePausePeriods([
+      ...currentPeriods,
+      ProgramPausePeriod(
+        startDate: effectiveStart,
+        extendEndDate: extendEndDate,
+      ),
+    ]);
+    if (_pausePeriodListsEqual(currentPeriods, nextPeriods)) return this;
+    return copyWith(
+      pausePeriods: nextPeriods,
+      updatedAt: now ?? DateTime.now(),
+    );
+  }
+
+  TrainingProgram resumeFrom(DateTime resumeDate, {DateTime? now}) {
+    final resume = _dateOnly(resumeDate);
+    final nextPeriods = <ProgramPausePeriod>[];
+    var changed = false;
+
+    for (final period in _mergePausePeriods(pausePeriods)) {
+      if (resume.isBefore(period.startDate)) {
+        nextPeriods.add(period);
+        continue;
+      }
+
+      if (resume == period.startDate) {
+        changed = true;
+        continue;
+      }
+
+      final endDate = period.endDate;
+      if (endDate == null || resume.isBefore(endDate)) {
+        nextPeriods.add(period.copyWith(endDate: resume));
+        changed = true;
+      } else {
+        nextPeriods.add(period);
+      }
+    }
+
+    if (!changed) return this;
+    return copyWith(
+      pausePeriods: _mergePausePeriods(nextPeriods),
+      updatedAt: now ?? DateTime.now(),
+    );
   }
 
   TrainingProgram advanceToNextDay({DateTime? advancedAt}) {
@@ -366,6 +514,7 @@ class TrainingProgram {
     DateTime? activatedAt,
     int? activatedDayIndex,
     AdvanceMode? advanceMode,
+    List<ProgramPausePeriod>? pausePeriods,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => TrainingProgram(
@@ -378,13 +527,89 @@ class TrainingProgram {
     activatedAt: activatedAt ?? this.activatedAt,
     activatedDayIndex: activatedDayIndex ?? this.activatedDayIndex,
     advanceMode: advanceMode ?? this.advanceMode,
+    pausePeriods: pausePeriods ?? this.pausePeriods,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
+
+  int _extendablePausedDaysBetween(DateTime start, DateTime target) {
+    if (!target.isAfter(start)) return 0;
+
+    var pausedDays = 0;
+    for (final period in _mergePausePeriods(pausePeriods)) {
+      if (!period.extendEndDate) continue;
+      final pauseEnd = period.endDate ?? target;
+      final effectiveStart = _laterDate(start, period.startDate);
+      final effectiveEnd = _earlierDate(target, pauseEnd);
+      if (effectiveEnd.isAfter(effectiveStart)) {
+        pausedDays += effectiveEnd.difference(effectiveStart).inDays;
+      }
+    }
+    return pausedDays;
+  }
+}
+
+List<ProgramPausePeriod> _mergePausePeriods(List<ProgramPausePeriod> periods) {
+  final sorted =
+      periods
+          .where((p) => p.endDate == null || p.endDate!.isAfter(p.startDate))
+          .map(
+            (p) => ProgramPausePeriod(
+              startDate: _dateOnly(p.startDate),
+              endDate: p.endDate == null ? null : _dateOnly(p.endDate!),
+              extendEndDate: p.extendEndDate,
+            ),
+          )
+          .toList()
+        ..sort((a, b) => a.startDate.compareTo(b.startDate));
+  final merged = <ProgramPausePeriod>[];
+  for (final period in sorted) {
+    if (merged.isEmpty) {
+      merged.add(period);
+      continue;
+    }
+    final last = merged.last;
+    if (last.endDate == null) {
+      if (period.extendEndDate && !last.extendEndDate) {
+        merged[merged.length - 1] = last.copyWith(extendEndDate: true);
+      }
+      continue;
+    }
+    if (period.startDate.isAfter(last.endDate!)) {
+      merged.add(period);
+      continue;
+    }
+    final nextEnd = period.endDate == null
+        ? null
+        : period.endDate!.isAfter(last.endDate!)
+        ? period.endDate
+        : last.endDate;
+    merged[merged.length - 1] = ProgramPausePeriod(
+      startDate: last.startDate,
+      endDate: nextEnd,
+      extendEndDate: last.extendEndDate || period.extendEndDate,
+    );
+  }
+  return merged;
 }
 
 DateTime _dateOnly(DateTime value) =>
     DateTime.utc(value.year, value.month, value.day);
+
+DateTime _earlierDate(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
+
+DateTime _laterDate(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
+
+bool _pausePeriodListsEqual(
+  List<ProgramPausePeriod> a,
+  List<ProgramPausePeriod> b,
+) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i += 1) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
 
 TrainingProgram? activeTrainingProgramForUser(
   List<TrainingProgram> programs,

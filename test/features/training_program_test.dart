@@ -167,6 +167,13 @@ void main() {
           activatedAt: now,
           activatedDayIndex: 1,
           advanceMode: AdvanceMode.manual,
+          pausePeriods: [
+            ProgramPausePeriod(
+              startDate: DateTime(2025, 6, 3),
+              endDate: DateTime(2025, 6, 5),
+              extendEndDate: false,
+            ),
+          ],
           createdAt: now,
           updatedAt: now,
           days: [
@@ -203,6 +210,12 @@ void main() {
         expect(restored.activatedAt, now);
         expect(restored.activatedDayIndex, 1);
         expect(restored.advanceMode, AdvanceMode.manual);
+        expect(restored.pausePeriods.length, 1);
+        expect(restored.pausePeriods.first.startDate.year, 2025);
+        expect(restored.pausePeriods.first.startDate.month, 6);
+        expect(restored.pausePeriods.first.startDate.day, 3);
+        expect(restored.pausePeriods.first.endDate?.day, 5);
+        expect(restored.pausePeriods.first.extendEndDate, false);
 
         expect(restored.days.length, 2);
         expect(restored.days[0].kind, DayKind.training);
@@ -235,6 +248,7 @@ void main() {
       expect(program.currentDayIndex, 0);
       expect(program.activatedAt, isNull);
       expect(program.activatedDayIndex, 0);
+      expect(program.pausePeriods, isEmpty);
       expect(program.days, isEmpty);
     });
 
@@ -455,6 +469,243 @@ void main() {
         expect(program.programDayForDate(DateTime(2025, 6, 2))?.name, 'Rest');
       },
     );
+
+    test('open pause returns null from pause start onward', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        activatedAt: DateTime(2025, 6, 1),
+        activatedDayIndex: 0,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+          ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+          ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+        ],
+      ).pauseFrom(DateTime(2025, 6, 3), now: now);
+
+      expect(program.isPausedOn(DateTime(2025, 6, 2)), false);
+      expect(program.isPausedOn(DateTime(2025, 6, 3)), true);
+      expect(program.programDayForDate(DateTime(2025, 6, 2))?.name, 'Pull');
+      expect(program.programDayForDate(DateTime(2025, 6, 3)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 10)), isNull);
+    });
+
+    test('pause from a past date opens pause from selected start', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        activatedAt: DateTime(2025, 6, 1),
+        activatedDayIndex: 0,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+        ],
+      ).pauseFrom(DateTime(2025, 6, 2, 20), now: DateTime(2025, 6, 5, 9));
+
+      expect(program.updatedAt, DateTime(2025, 6, 5, 9));
+      expect(program.pausePeriods.single.startDate, DateTime.utc(2025, 6, 2));
+      expect(program.pausePeriods.single.endDate, isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 1))?.name, 'Push');
+      expect(program.programDayForDate(DateTime(2025, 6, 2)), isNull);
+      expect(program.isPausedNow(today: DateTime(2025, 6, 5)), true);
+    });
+
+    test('pause before activation clamps to activation date', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        activatedAt: DateTime(2025, 6, 3),
+        activatedDayIndex: 0,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+        ],
+      ).pauseFrom(DateTime(2025, 6, 1), now: now);
+
+      expect(program.pausePeriods.single.startDate, DateTime.utc(2025, 6, 3));
+      expect(program.isPausedOn(DateTime(2025, 6, 2)), false);
+      expect(program.programDayForDate(DateTime(2025, 6, 2)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 3)), isNull);
+    });
+
+    test('closed pause shifts projection after resume date', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                activatedDayIndex: 0,
+                createdAt: now,
+                updatedAt: now,
+                days: [
+                  ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+                  ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+                  ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+                  ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+                ],
+              )
+              .pauseFrom(DateTime(2025, 6, 3), now: now)
+              .resumeFrom(DateTime(2025, 6, 6), now: now);
+
+      expect(program.programDayForDate(DateTime(2025, 6, 1))?.name, 'Push');
+      expect(program.programDayForDate(DateTime(2025, 6, 2))?.name, 'Pull');
+      expect(program.programDayForDate(DateTime(2025, 6, 3)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 5)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 6))?.name, 'Legs');
+      expect(program.programDayForDate(DateTime(2025, 6, 7))?.name, 'Rest');
+    });
+
+    test('programDayForWorkoutDate returns null when today is paused', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        currentDayIndex: 1,
+        activatedAt: DateTime(2025, 6, 1),
+        activatedDayIndex: 0,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+        ],
+      ).pauseFrom(DateTime(2025, 6, 3), now: now);
+
+      expect(
+        program.programDayForWorkoutDate(
+          DateTime(2025, 6, 3),
+          today: DateTime(2025, 6, 3, 12),
+        ),
+        isNull,
+      );
+    });
+
+    test('resume from a past date closes the pause before today', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                activatedDayIndex: 0,
+                createdAt: now,
+                updatedAt: now,
+                days: [
+                  ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+                  ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+                  ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+                ],
+              )
+              .pauseFrom(DateTime(2025, 6, 3), now: now)
+              .resumeFrom(DateTime(2025, 6, 5), now: now);
+
+      expect(program.isPausedOn(DateTime(2025, 6, 4)), true);
+      expect(program.isPausedOn(DateTime(2025, 6, 5)), false);
+      expect(program.programDayForDate(DateTime(2025, 6, 5))?.name, 'Legs');
+    });
+
+    test('pausing again while paused keeps the earlier start date', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                createdAt: now,
+                updatedAt: now,
+              )
+              .pauseFrom(DateTime(2025, 6, 5), now: now)
+              .pauseFrom(DateTime(2025, 6, 3), now: now);
+
+      expect(program.pausePeriods.length, 1);
+      expect(program.pausePeriods.first.startDate.day, 3);
+      expect(program.pausePeriods.first.endDate, isNull);
+    });
+
+    test('pausing while already paused does not duplicate open pause', () {
+      final paused = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        activatedAt: DateTime(2025, 6, 1),
+        createdAt: now,
+        updatedAt: now,
+      ).pauseFrom(DateTime(2025, 6, 3), now: DateTime(2025, 6, 3));
+
+      final duplicate = paused.pauseFrom(
+        DateTime(2025, 6, 5),
+        now: DateTime(2025, 6, 5),
+      );
+
+      expect(duplicate.pausePeriods.length, 1);
+      expect(duplicate.pausePeriods.first.startDate, DateTime.utc(2025, 6, 3));
+      expect(duplicate.pausePeriods.first.endDate, isNull);
+      expect(duplicate.updatedAt, DateTime(2025, 6, 3));
+    });
+
+    test('resume on pause start cancels zero length pause', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                createdAt: now,
+                updatedAt: now,
+              )
+              .pauseFrom(DateTime(2025, 6, 3), now: now)
+              .resumeFrom(DateTime(2025, 6, 3), now: now);
+
+      expect(program.pausePeriods, isEmpty);
+    });
+
+    test('overlapping pause periods are merged before projection', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                activatedDayIndex: 0,
+                createdAt: now,
+                updatedAt: now,
+                days: [
+                  ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+                  ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+                  ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+                ],
+              )
+              .pauseFrom(DateTime(2025, 6, 3), now: now)
+              .resumeFrom(DateTime(2025, 6, 5), now: now)
+              .pauseFrom(DateTime(2025, 6, 4), now: now)
+              .resumeFrom(DateTime(2025, 6, 7), now: now);
+
+      expect(program.pausePeriods.length, 1);
+      expect(program.pausePeriods.first.startDate.day, 3);
+      expect(program.pausePeriods.first.endDate?.day, 7);
+      expect(program.programDayForDate(DateTime(2025, 6, 7))?.name, 'Legs');
+    });
 
     test('advanceToNextDay wraps through training and rest days', () {
       final program = TrainingProgram(

@@ -368,6 +368,7 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
     final userId = ref.read(currentUserIdProvider);
     final program = await AppDatabase.instance.getActiveTrainingProgram(userId);
     if (program == null) return;
+    if (program.isPausedNow()) return;
     final advanced = program.advanceToNextDay();
     await AppDatabase.instance.saveTrainingProgram(userId, advanced);
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
