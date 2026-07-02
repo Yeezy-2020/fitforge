@@ -247,19 +247,28 @@ class AppDatabase {
     return null;
   }
 
-  Future<void> setActiveTrainingProgram(String userId, String programId) async {
+  Future<void> setActiveTrainingProgram(
+    String userId,
+    String programId, {
+    DateTime? activatedAt,
+    int? plannedCycleCount,
+  }) async {
     final programs = await getTrainingPrograms(userId);
     if (!programs.any((p) => p.id == programId)) return;
     final now = DateTime.now();
+    final start = activatedAt ?? now;
     for (int i = 0; i < programs.length; i++) {
       final program = programs[i];
       final activating = program.id == programId;
       final updated = program.copyWith(
         active: activating,
-        activatedAt: activating ? now : program.activatedAt,
+        activatedAt: activating ? start : program.activatedAt,
         activatedDayIndex: activating
             ? program.normalizedCurrentDayIndex
             : program.activatedDayIndex,
+        plannedCycleCount: activating
+            ? plannedCycleCount
+            : program.plannedCycleCount,
         updatedAt: activating ? now : program.updatedAt,
       );
       programs[i] = activating

@@ -124,6 +124,62 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     );
   }
 
+  void _addProgramPrescription(
+    WorkoutPrescription rx, {
+    bool useLastLogged = false,
+  }) {
+    _addToPending(
+      rx.exerciseId,
+      useLastLogged ? rx.lastLoggedSets! : rx.sets,
+      useLastLogged ? rx.lastLoggedReps! : rx.reps,
+      useLastLogged ? rx.lastLoggedWeightKg! : rx.weightKg,
+      programId: rx.programId,
+      programDayId: rx.programDayId,
+      programExerciseId: rx.programExerciseId,
+    );
+  }
+
+  Future<void> _addAllProgramPrescriptions(
+    List<WorkoutPrescription> prescriptions,
+    L10n l10n,
+  ) async {
+    final recoveryCount = prescriptions
+        .where((rx) => rx.shouldOfferRecoveryLoad)
+        .length;
+    var useRecoveryLoads = false;
+    if (recoveryCount > 0) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.get('extendedBreakDialogTitle')),
+          content: Text(
+            l10n.format('extendedBreakDialogBody', {
+              'count': recoveryCount.toString(),
+            }),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.get('usePlannedLoad')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.get('useLastLoad')),
+            ),
+          ],
+        ),
+      );
+      if (choice == null) return;
+      useRecoveryLoads = choice;
+    }
+    for (final rx in prescriptions) {
+      _addProgramPrescription(
+        rx,
+        useLastLogged: useRecoveryLoads && rx.shouldOfferRecoveryLoad,
+      );
+    }
+  }
+
   void _addCustomExercise() {
     final l10n = ref.read(l10nProvider);
     final name = _customNameCtrl.text.trim();
@@ -657,41 +713,91 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           ...prescriptions.map(
             (rx) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: Text(
-                      exName(rx.exerciseId),
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          exName(rx.exerciseId),
+                          style: const TextStyle(fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${rx.sets} × ${rx.reps} @ ${formatTrainingWeight(rx.weightKg, trainUnit)}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _addProgramPrescription(rx),
+                        child: Text(
+                          l10n.get('add'),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${rx.sets} × ${rx.reps} @ ${formatTrainingWeight(rx.weightKg, trainUnit)}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  const SizedBox(width: 4),
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  if (rx.shouldOfferRecoveryLoad) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outline.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.format('extendedBreakPrompt', {
+                              'days': rx.daysSinceLastLog.toString(),
+                            }),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              onPressed: () => _addProgramPrescription(
+                                rx,
+                                useLastLogged: true,
+                              ),
+                              child: Text(
+                                l10n.get('useLastLoad'),
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    onPressed: () => _addToPending(
-                      rx.exerciseId,
-                      rx.sets,
-                      rx.reps,
-                      rx.weightKg,
-                      programId: rx.programId,
-                      programDayId: rx.programDayId,
-                      programExerciseId: rx.programExerciseId,
-                    ),
-                    child: Text(
-                      l10n.get('add'),
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -712,19 +818,8 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                     l10n.get('addAll'),
                     style: const TextStyle(fontSize: 11),
                   ),
-                  onPressed: () {
-                    for (final rx in prescriptions) {
-                      _addToPending(
-                        rx.exerciseId,
-                        rx.sets,
-                        rx.reps,
-                        rx.weightKg,
-                        programId: rx.programId,
-                        programDayId: rx.programDayId,
-                        programExerciseId: rx.programExerciseId,
-                      );
-                    }
-                  },
+                  onPressed: () =>
+                      _addAllProgramPrescriptions(prescriptions, l10n),
                 ),
               ],
             ),

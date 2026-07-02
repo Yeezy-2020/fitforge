@@ -358,9 +358,18 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }
 
-  Future<void> setActive(String programId) async {
+  Future<void> setActive(
+    String programId, {
+    DateTime? activatedAt,
+    int? plannedCycleCount,
+  }) async {
     final userId = ref.read(currentUserIdProvider);
-    await AppDatabase.instance.setActiveTrainingProgram(userId, programId);
+    await AppDatabase.instance.setActiveTrainingProgram(
+      userId,
+      programId,
+      activatedAt: activatedAt,
+      plannedCycleCount: plannedCycleCount,
+    );
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }
 
@@ -411,17 +420,34 @@ final workoutPrescriptionsForDateProvider =
               programExerciseId: exercise.id,
               beforeDate: date,
             );
+        final prescription = const ProgramPrescriptionCalculator().calculate(
+          programExercise: exercise,
+          programId: program.id,
+          programDayId: day.id,
+          lastLog: lastLog,
+        );
+        final daysSinceLastLog = lastLog == null
+            ? null
+            : _dateOnlyUtc(date).difference(_dateOnlyUtc(lastLog.date)).inDays;
+        final previousLog = lastLog;
         prescriptions.add(
-          const ProgramPrescriptionCalculator().calculate(
-            programExercise: exercise,
-            programId: program.id,
-            programDayId: day.id,
-            lastLog: lastLog,
-          ),
+          previousLog != null &&
+                  daysSinceLastLog != null &&
+                  daysSinceLastLog > 7
+              ? prescription.copyWith(
+                  daysSinceLastLog: daysSinceLastLog,
+                  lastLoggedSets: previousLog.sets,
+                  lastLoggedReps: previousLog.reps,
+                  lastLoggedWeightKg: previousLog.weightKg,
+                )
+              : prescription,
         );
       }
       return prescriptions;
     });
+
+DateTime _dateOnlyUtc(DateTime value) =>
+    DateTime.utc(value.year, value.month, value.day);
 
 // ===== Diet Logs =====
 // ---- Diet Cache (in-memory, offline-ready) ----

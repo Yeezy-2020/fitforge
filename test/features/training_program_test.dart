@@ -43,10 +43,15 @@ void main() {
       );
     });
 
+    test('legacy periodized type falls back to fixed load', () {
+      final scheme = ProgressionScheme.fromJson({'type': 'periodized'});
+      expect(scheme.type, ProgressionSchemeType.fixedLoad);
+    });
+
     test('missing numeric fields use defaults', () {
       final scheme = ProgressionScheme.fromJson({'type': 'linearWeight'});
       expect(scheme.weightIncrementKg, 2.5);
-      expect(scheme.percentIncrement, 5.0);
+      expect(scheme.percentIncrement, 2.5);
       expect(scheme.periodWeeks, 4);
       expect(scheme.deloadPercent, 0.5);
     });
@@ -166,6 +171,7 @@ void main() {
           currentDayIndex: 2,
           activatedAt: now,
           activatedDayIndex: 1,
+          plannedCycleCount: 6,
           advanceMode: AdvanceMode.manual,
           pausePeriods: [
             ProgramPausePeriod(
@@ -209,6 +215,7 @@ void main() {
         expect(restored.currentDayIndex, 2);
         expect(restored.activatedAt, now);
         expect(restored.activatedDayIndex, 1);
+        expect(restored.plannedCycleCount, 6);
         expect(restored.advanceMode, AdvanceMode.manual);
         expect(restored.pausePeriods.length, 1);
         expect(restored.pausePeriods.first.startDate.year, 2025);
@@ -248,6 +255,7 @@ void main() {
       expect(program.currentDayIndex, 0);
       expect(program.activatedAt, isNull);
       expect(program.activatedDayIndex, 0);
+      expect(program.plannedCycleCount, isNull);
       expect(program.pausePeriods, isEmpty);
       expect(program.days, isEmpty);
     });
@@ -291,10 +299,12 @@ void main() {
         active: true,
         activatedAt: activatedAt,
         activatedDayIndex: 2,
+        plannedCycleCount: 8,
       );
       expect(updated.active, true);
       expect(updated.activatedAt, activatedAt);
       expect(updated.activatedDayIndex, 2);
+      expect(updated.plannedCycleCount, 8);
     });
 
     test('supports "train 3, rest 1" cycle', () {
@@ -398,6 +408,120 @@ void main() {
         );
       },
     );
+
+    test('programDayForDate stops after planned cycle count', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        activatedAt: DateTime(2025, 6, 1),
+        activatedDayIndex: 0,
+        plannedCycleCount: 2,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+          ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+          ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+        ],
+      );
+
+      expect(program.programDayForDate(DateTime(2025, 5, 31)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 1))?.name, 'Push');
+      expect(program.programDayForDate(DateTime(2025, 6, 4))?.name, 'Rest');
+      expect(program.programDayForDate(DateTime(2025, 6, 5))?.name, 'Push');
+      expect(program.programDayForDate(DateTime(2025, 6, 8))?.name, 'Rest');
+      expect(program.programDayForDate(DateTime(2025, 6, 9)), isNull);
+      expect(program.plannedEndDate(), DateTime.utc(2025, 6, 8));
+    });
+
+    test('extendable pause shifts finite planned end date', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                activatedDayIndex: 0,
+                plannedCycleCount: 2,
+                createdAt: now,
+                updatedAt: now,
+                days: [
+                  ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+                  ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+                  ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+                  ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+                ],
+              )
+              .pauseFrom(DateTime(2025, 6, 3), now: now)
+              .resumeFrom(DateTime(2025, 6, 6), now: now);
+
+      expect(program.programDayForDate(DateTime(2025, 6, 3)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 5)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 6))?.name, 'Legs');
+      expect(program.programDayForDate(DateTime(2025, 6, 11))?.name, 'Rest');
+      expect(program.programDayForDate(DateTime(2025, 6, 12)), isNull);
+      expect(program.plannedEndDate(), DateTime.utc(2025, 6, 11));
+    });
+
+    test('non-extendable pause does not shift finite planned end date', () {
+      final program =
+          TrainingProgram(
+                id: 'prog1',
+                userId: 'user1',
+                name: 'PPL',
+                active: true,
+                activatedAt: DateTime(2025, 6, 1),
+                activatedDayIndex: 0,
+                plannedCycleCount: 2,
+                createdAt: now,
+                updatedAt: now,
+                days: [
+                  ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+                  ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+                  ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+                  ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+                ],
+              )
+              .pauseFrom(DateTime(2025, 6, 3), now: now, extendEndDate: false)
+              .resumeFrom(DateTime(2025, 6, 6), now: now);
+
+      expect(program.programDayForDate(DateTime(2025, 6, 3)), isNull);
+      expect(program.programDayForDate(DateTime(2025, 6, 6))?.name, 'Pull');
+      expect(program.programDayForDate(DateTime(2025, 6, 8))?.name, 'Rest');
+      expect(program.programDayForDate(DateTime(2025, 6, 9)), isNull);
+      expect(program.plannedEndDate(), DateTime.utc(2025, 6, 8));
+    });
+
+    test('programDayForWorkoutDate returns null after planned interval', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        currentDayIndex: 0,
+        activatedAt: DateTime(2025, 6, 1),
+        activatedDayIndex: 0,
+        plannedCycleCount: 1,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Rest', kind: DayKind.rest),
+        ],
+      );
+
+      expect(
+        program.programDayForWorkoutDate(
+          DateTime(2025, 6, 3),
+          today: DateTime(2025, 6, 3, 12),
+        ),
+        isNull,
+      );
+    });
 
     test('programDayForDate returns null for inactive or empty programs', () {
       final inactive = TrainingProgram(
@@ -1031,13 +1155,12 @@ void main() {
       expect(rx.weightKg, 80);
     });
 
-    test('linear periodization adds 2.5 percent load and drops one rep', () {
+    test('linear periodization adds cycle percent load and drops one rep', () {
       final rx = calculate(
         exercise(
           type: ProgressionSchemeType.linearPeriodization,
           minReps: 8,
           maxReps: 12,
-          percentIncrement: 5.0,
         ),
         log(reps: 10, weightKg: 100),
       );
@@ -1045,33 +1168,70 @@ void main() {
       expect(rx.weightKg, 102.5);
     });
 
-    test('linear periodization does not drop below minimum reps', () {
+    test(
+      'linear periodization starts from start reps without previous log',
+      () {
+        final rx = calculate(
+          exercise(
+            type: ProgressionSchemeType.linearPeriodization,
+            minReps: 6,
+            maxReps: 10,
+          ),
+          null,
+        );
+        expect(rx.reps, 10);
+        expect(rx.weightKg, 40);
+      },
+    );
+
+    test('linear periodization uses configured percent increment', () {
       final rx = calculate(
         exercise(
           type: ProgressionSchemeType.linearPeriodization,
           minReps: 8,
           maxReps: 12,
-          percentIncrement: 2.5,
+          percentIncrement: 5.0,
+        ),
+        log(reps: 12, weightKg: 100),
+      );
+      expect(rx.reps, 11);
+      expect(rx.weightKg, 105);
+    });
+
+    test('linear periodization stops load increases at final reps', () {
+      final rx = calculate(
+        exercise(
+          type: ProgressionSchemeType.linearPeriodization,
+          minReps: 8,
+          maxReps: 12,
+          percentIncrement: 5.0,
         ),
         log(reps: 8, weightKg: 100),
       );
       expect(rx.reps, 8);
-      expect(rx.weightKg, 102.5);
+      expect(rx.weightKg, 100);
+    });
+
+    test('copyWith can add extended break recovery values', () {
+      final rx =
+          calculate(
+            exercise(type: ProgressionSchemeType.linearPeriodization),
+            log(reps: 10, weightKg: 100),
+          ).copyWith(
+            daysSinceLastLog: 10,
+            lastLoggedSets: 3,
+            lastLoggedReps: 10,
+            lastLoggedWeightKg: 100,
+          );
+      expect(rx.shouldOfferRecoveryLoad, isTrue);
+      expect(rx.daysSinceLastLog, 10);
+      expect(rx.lastLoggedReps, 10);
+      expect(rx.lastLoggedWeightKg, 100);
     });
 
     test('no previous log normalizes invalid starting rep range', () {
       final rx = calculate(exercise(minReps: 12, maxReps: 8), null);
       expect(rx.reps, 8);
-    });
-
-    test('periodized MVP keeps last session values', () {
-      final rx = calculate(
-        exercise(type: ProgressionSchemeType.periodized),
-        log(sets: 4, reps: 9, weightKg: 75),
-      );
-      expect(rx.sets, 4);
-      expect(rx.reps, 9);
-      expect(rx.weightKg, 75);
     });
   });
 
@@ -1086,6 +1246,10 @@ void main() {
         reps: 8,
         weightKg: 80,
         reason: 'Start of cycle',
+        daysSinceLastLog: 10,
+        lastLoggedSets: 3,
+        lastLoggedReps: 8,
+        lastLoggedWeightKg: 77.5,
       );
       final restored = WorkoutPrescription.fromJson(rx.toJson());
       expect(restored.programId, 'prog1');
@@ -1096,6 +1260,10 @@ void main() {
       expect(restored.reps, 8);
       expect(restored.weightKg, 80);
       expect(restored.reason, 'Start of cycle');
+      expect(restored.daysSinceLastLog, 10);
+      expect(restored.lastLoggedSets, 3);
+      expect(restored.lastLoggedReps, 8);
+      expect(restored.lastLoggedWeightKg, 77.5);
     });
   });
 

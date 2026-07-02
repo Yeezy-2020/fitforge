@@ -3,7 +3,6 @@ enum ProgressionSchemeType {
   linearWeight,
   fixedLoad,
   linearPeriodization,
-  periodized,
 }
 
 enum DayKind { training, rest }
@@ -21,7 +20,7 @@ ProgressionSchemeType _progressionSchemeTypeFromString(String? value) {
     case 'linearPeriodization':
       return ProgressionSchemeType.linearPeriodization;
     case 'periodized':
-      return ProgressionSchemeType.periodized;
+      return ProgressionSchemeType.fixedLoad;
     default:
       return ProgressionSchemeType.doubleProgression;
   }
@@ -59,7 +58,7 @@ class ProgressionScheme {
   const ProgressionScheme({
     this.type = ProgressionSchemeType.doubleProgression,
     this.weightIncrementKg = 2.5,
-    this.percentIncrement = 5.0,
+    this.percentIncrement = 2.5,
     this.periodWeeks = 4,
     this.deloadPercent = 0.5,
   });
@@ -69,7 +68,7 @@ class ProgressionScheme {
         type: _progressionSchemeTypeFromString(json['type'] as String?),
         weightIncrementKg:
             (json['weightIncrementKg'] as num?)?.toDouble() ?? 2.5,
-        percentIncrement: (json['percentIncrement'] as num?)?.toDouble() ?? 5.0,
+        percentIncrement: (json['percentIncrement'] as num?)?.toDouble() ?? 2.5,
         periodWeeks: json['periodWeeks'] as int? ?? 4,
         deloadPercent: (json['deloadPercent'] as num?)?.toDouble() ?? 0.5,
       );
@@ -289,6 +288,7 @@ class TrainingProgram {
   final int currentDayIndex;
   final DateTime? activatedAt;
   final int activatedDayIndex;
+  final int? plannedCycleCount;
   final AdvanceMode advanceMode;
   final List<ProgramPausePeriod> pausePeriods;
   final DateTime createdAt;
@@ -303,6 +303,7 @@ class TrainingProgram {
     this.currentDayIndex = 0,
     this.activatedAt,
     this.activatedDayIndex = 0,
+    this.plannedCycleCount,
     this.advanceMode = AdvanceMode.auto,
     this.pausePeriods = const [],
     required this.createdAt,
@@ -325,6 +326,7 @@ class TrainingProgram {
             ? DateTime.parse(json['activatedAt'] as String)
             : null,
         activatedDayIndex: json['activatedDayIndex'] as int? ?? 0,
+        plannedCycleCount: json['plannedCycleCount'] as int?,
         advanceMode: _advanceModeFromString(json['advanceMode'] as String?),
         pausePeriods: json['pausePeriods'] != null
             ? (json['pausePeriods'] as List)
@@ -351,6 +353,7 @@ class TrainingProgram {
     'currentDayIndex': currentDayIndex,
     'activatedAt': activatedAt?.toIso8601String(),
     'activatedDayIndex': activatedDayIndex,
+    'plannedCycleCount': plannedCycleCount,
     'advanceMode': advanceMode.name,
     'pausePeriods': pausePeriods.map((p) => p.toJson()).toList(),
     'createdAt': createdAt.toIso8601String(),
@@ -367,6 +370,12 @@ class TrainingProgram {
     return days[normalizedCurrentDayIndex];
   }
 
+  int? get plannedProgramDayCount {
+    final cycles = plannedCycleCount;
+    if (cycles == null || cycles <= 0 || days.isEmpty) return null;
+    return days.length * cycles;
+  }
+
   int get normalizedActivatedDayIndex {
     if (days.isEmpty) return 0;
     return activatedDayIndex % days.length;
@@ -374,17 +383,11 @@ class TrainingProgram {
 
   ProgramDay? programDayForDate(DateTime date) {
     if (!active || days.isEmpty) return null;
-    final start = _dateOnly(activatedAt ?? updatedAt);
     final startIndex = activatedAt == null
         ? normalizedCurrentDayIndex
         : normalizedActivatedDayIndex;
-    final target = _dateOnly(date);
-    final offset = target.difference(start).inDays;
-    if (offset < 0) return null;
-    if (isPausedOn(target)) return null;
-    final pausedDays = _extendablePausedDaysBetween(start, target);
-    final activeOffset = offset - pausedDays;
-    if (activeOffset < 0) return null;
+    final activeOffset = _activeOffsetForDate(date);
+    if (activeOffset == null) return null;
     final index = (startIndex + activeOffset) % days.length;
     return days[index];
   }
@@ -393,9 +396,32 @@ class TrainingProgram {
     if (!active || days.isEmpty) return null;
     final target = _dateOnly(date);
     final currentDate = _dateOnly(today ?? DateTime.now());
-    if (isPausedOn(target)) return null;
+    if (_activeOffsetForDate(target) == null) return null;
     if (target == currentDate) return currentDay;
     return programDayForDate(date);
+  }
+
+  DateTime? plannedEndDate() {
+    final dayCount = plannedProgramDayCount;
+    if (!active || days.isEmpty || dayCount == null) return null;
+    if (_mergePausePeriods(
+      pausePeriods,
+    ).any((period) => period.endDate == null)) {
+      return null;
+    }
+
+    final start = _dateOnly(activatedAt ?? updatedAt);
+    var date = start;
+    DateTime? lastScheduledDate;
+    var guard = 0;
+    while (guard < dayCount + 3650) {
+      if (programDayForDate(date) != null) {
+        lastScheduledDate = date;
+      }
+      date = date.add(const Duration(days: 1));
+      guard += 1;
+    }
+    return lastScheduledDate;
   }
 
   bool isPausedOn(DateTime date) =>
@@ -513,6 +539,7 @@ class TrainingProgram {
     int? currentDayIndex,
     DateTime? activatedAt,
     int? activatedDayIndex,
+    int? plannedCycleCount,
     AdvanceMode? advanceMode,
     List<ProgramPausePeriod>? pausePeriods,
     DateTime? createdAt,
@@ -526,11 +553,27 @@ class TrainingProgram {
     currentDayIndex: currentDayIndex ?? this.currentDayIndex,
     activatedAt: activatedAt ?? this.activatedAt,
     activatedDayIndex: activatedDayIndex ?? this.activatedDayIndex,
+    plannedCycleCount: plannedCycleCount ?? this.plannedCycleCount,
     advanceMode: advanceMode ?? this.advanceMode,
     pausePeriods: pausePeriods ?? this.pausePeriods,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
+
+  int? _activeOffsetForDate(DateTime date) {
+    if (!active || days.isEmpty) return null;
+    final start = _dateOnly(activatedAt ?? updatedAt);
+    final target = _dateOnly(date);
+    final offset = target.difference(start).inDays;
+    if (offset < 0) return null;
+    if (isPausedOn(target)) return null;
+    final pausedDays = _extendablePausedDaysBetween(start, target);
+    final activeOffset = offset - pausedDays;
+    if (activeOffset < 0) return null;
+    final plannedDays = plannedProgramDayCount;
+    if (plannedDays != null && activeOffset >= plannedDays) return null;
+    return activeOffset;
+  }
 
   int _extendablePausedDaysBetween(DateTime start, DateTime target) {
     if (!target.isAfter(start)) return 0;
@@ -630,6 +673,10 @@ class WorkoutPrescription {
   final int reps;
   final double weightKg;
   final String reason;
+  final int? daysSinceLastLog;
+  final int? lastLoggedSets;
+  final int? lastLoggedReps;
+  final double? lastLoggedWeightKg;
 
   const WorkoutPrescription({
     required this.programId,
@@ -640,7 +687,18 @@ class WorkoutPrescription {
     required this.reps,
     required this.weightKg,
     this.reason = '',
+    this.daysSinceLastLog,
+    this.lastLoggedSets,
+    this.lastLoggedReps,
+    this.lastLoggedWeightKg,
   });
+
+  bool get shouldOfferRecoveryLoad =>
+      daysSinceLastLog != null &&
+      daysSinceLastLog! > 7 &&
+      lastLoggedSets != null &&
+      lastLoggedReps != null &&
+      lastLoggedWeightKg != null;
 
   factory WorkoutPrescription.fromJson(Map<String, dynamic> json) =>
       WorkoutPrescription(
@@ -652,6 +710,10 @@ class WorkoutPrescription {
         reps: json['reps'] as int,
         weightKg: (json['weightKg'] as num).toDouble(),
         reason: json['reason'] as String? ?? '',
+        daysSinceLastLog: json['daysSinceLastLog'] as int?,
+        lastLoggedSets: json['lastLoggedSets'] as int?,
+        lastLoggedReps: json['lastLoggedReps'] as int?,
+        lastLoggedWeightKg: (json['lastLoggedWeightKg'] as num?)?.toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -663,7 +725,39 @@ class WorkoutPrescription {
     'reps': reps,
     'weightKg': weightKg,
     'reason': reason,
+    'daysSinceLastLog': daysSinceLastLog,
+    'lastLoggedSets': lastLoggedSets,
+    'lastLoggedReps': lastLoggedReps,
+    'lastLoggedWeightKg': lastLoggedWeightKg,
   };
+
+  WorkoutPrescription copyWith({
+    String? programId,
+    String? programDayId,
+    String? programExerciseId,
+    String? exerciseId,
+    int? sets,
+    int? reps,
+    double? weightKg,
+    String? reason,
+    int? daysSinceLastLog,
+    int? lastLoggedSets,
+    int? lastLoggedReps,
+    double? lastLoggedWeightKg,
+  }) => WorkoutPrescription(
+    programId: programId ?? this.programId,
+    programDayId: programDayId ?? this.programDayId,
+    programExerciseId: programExerciseId ?? this.programExerciseId,
+    exerciseId: exerciseId ?? this.exerciseId,
+    sets: sets ?? this.sets,
+    reps: reps ?? this.reps,
+    weightKg: weightKg ?? this.weightKg,
+    reason: reason ?? this.reason,
+    daysSinceLastLog: daysSinceLastLog ?? this.daysSinceLastLog,
+    lastLoggedSets: lastLoggedSets ?? this.lastLoggedSets,
+    lastLoggedReps: lastLoggedReps ?? this.lastLoggedReps,
+    lastLoggedWeightKg: lastLoggedWeightKg ?? this.lastLoggedWeightKg,
+  );
 }
 
 /// Returns true when all required [ProgramExercise.id]s in [currentDay] are

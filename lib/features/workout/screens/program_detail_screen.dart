@@ -6,6 +6,7 @@ import '../../../data/models/training_program.dart';
 import '../../../core/localization/l10n.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
+import 'program_activation_dialog.dart';
 
 int _idSeq = 0;
 
@@ -60,9 +61,7 @@ class ProgramDetailScreen extends ConsumerWidget {
                 ),
                 onPressed: program.active
                     ? null
-                    : () => ref
-                          .read(trainingProgramsProvider.notifier)
-                          .setActive(program.id),
+                    : () => _setActiveProgram(context, ref, program, l10n),
               ),
             ],
           ),
@@ -173,6 +172,27 @@ class ProgramDetailScreen extends ConsumerWidget {
     await ref
         .read(trainingProgramsProvider.notifier)
         .save(program.copyWith(name: name, updatedAt: DateTime.now()));
+  }
+
+  static Future<void> _setActiveProgram(
+    BuildContext context,
+    WidgetRef ref,
+    TrainingProgram program,
+    L10n l10n,
+  ) async {
+    final config = await showProgramActivationDialog(
+      context: context,
+      l10n: l10n,
+      program: program,
+    );
+    if (config == null) return;
+    await ref
+        .read(trainingProgramsProvider.notifier)
+        .setActive(
+          program.id,
+          activatedAt: config.activatedAt,
+          plannedCycleCount: config.cycleCount,
+        );
   }
 
   static Future<void> _pauseProgram(
@@ -572,6 +592,8 @@ class _ProgramHeader extends StatelessWidget {
         : program.active
         ? l10n.get('active')
         : l10n.get('program');
+    final cycles = program.plannedCycleCount;
+    final plannedEnd = program.plannedEndDate();
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
@@ -634,6 +656,19 @@ class _ProgramHeader extends StatelessWidget {
                 color: theme.colorScheme.outline,
               ),
             ),
+            if (program.active && cycles != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                plannedEnd == null
+                    ? l10n.format('plannedCycles', {'count': cycles.toString()})
+                    : l10n.format('plannedThrough', {
+                        'date': l10n.shortDate(plannedEnd),
+                      }),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -998,6 +1033,7 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
   late final TextEditingController _maxRepsCtrl;
   late final TextEditingController _weightCtrl;
   late final TextEditingController _incrementCtrl;
+  late final TextEditingController _percentCtrl;
   late ProgressionSchemeType _type;
   String? _error;
 
@@ -1014,6 +1050,11 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     _incrementCtrl = TextEditingController(
       text: exercise.progressionScheme.weightIncrementKg.toStringAsFixed(1),
     );
+    _percentCtrl = TextEditingController(
+      text: exercise.progressionScheme.percentIncrement > 0
+          ? exercise.progressionScheme.percentIncrement.toStringAsFixed(1)
+          : '2.5',
+    );
     _type = exercise.progressionScheme.type;
   }
 
@@ -1024,6 +1065,7 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     _maxRepsCtrl.dispose();
     _weightCtrl.dispose();
     _incrementCtrl.dispose();
+    _percentCtrl.dispose();
     super.dispose();
   }
 
@@ -1032,14 +1074,12 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     final progressionHintKey = _progressionHintKey(_type);
     final fields = <Widget>[
       _numberField(_setsCtrl, widget.l10n.get('sets')),
-      if (_usesRepRange(_type)) ...[
-        _numberField(_minRepsCtrl, widget.l10n.get('startReps')),
-        _numberField(_maxRepsCtrl, widget.l10n.get('targetReps')),
-      ] else
-        _numberField(_maxRepsCtrl, widget.l10n.get('targetReps')),
+      ..._repFields(),
       _numberField(_weightCtrl, widget.l10n.get('startWeightKg')),
       if (_usesWeightIncrement(_type))
         _numberField(_incrementCtrl, widget.l10n.get('incrementKg')),
+      if (_usesPercentIncrement(_type))
+        _numberField(_percentCtrl, widget.l10n.get('cyclePercent')),
       _progressionField(),
     ];
 
@@ -1083,6 +1123,22 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
         FilledButton(onPressed: _save, child: Text(widget.l10n.get('save'))),
       ],
     );
+  }
+
+  List<Widget> _repFields() {
+    if (_type == ProgressionSchemeType.doubleProgression) {
+      return [
+        _numberField(_minRepsCtrl, widget.l10n.get('startReps')),
+        _numberField(_maxRepsCtrl, widget.l10n.get('finalReps')),
+      ];
+    }
+    if (_type == ProgressionSchemeType.linearPeriodization) {
+      return [
+        _numberField(_maxRepsCtrl, widget.l10n.get('startReps')),
+        _numberField(_minRepsCtrl, widget.l10n.get('finalReps')),
+      ];
+    }
+    return [_numberField(_maxRepsCtrl, widget.l10n.get('reps'))];
   }
 
   Widget _fieldWrap(List<Widget> fields) {
@@ -1151,21 +1207,14 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            DropdownMenuItem(
-              value: ProgressionSchemeType.periodized,
-              child: Text(
-                widget.l10n.get('progPeriodized'),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
           ],
           onChanged: (value) {
             if (value == null) return;
             setState(() {
               final wasIncrementScheme = _usesWeightIncrement(_type);
               final isIncrementScheme = _usesWeightIncrement(value);
-              final wasRepRange = _usesRepRange(_type);
-              final isRepRange = _usesRepRange(value);
+              final wasTwoReps = _usesTwoRepValues(_type);
+              final isTwoReps = _usesTwoRepValues(value);
               _type = value;
               if (!wasIncrementScheme && isIncrementScheme) {
                 final current = double.tryParse(_incrementCtrl.text);
@@ -1173,8 +1222,14 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
                   _incrementCtrl.text = '2.5';
                 }
               }
-              if (!wasRepRange && isRepRange) {
-                _restoreRepRangeFromTarget();
+              if (value == ProgressionSchemeType.linearPeriodization) {
+                final current = double.tryParse(_percentCtrl.text);
+                if (current == null || current <= 0) {
+                  _percentCtrl.text = '2.5';
+                }
+              }
+              if (!wasTwoReps && isTwoReps) {
+                _restoreTwoRepValues(value);
               }
             });
           },
@@ -1183,11 +1238,16 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     );
   }
 
-  void _restoreRepRangeFromTarget() {
+  void _restoreTwoRepValues(ProgressionSchemeType type) {
     final target = int.tryParse(_maxRepsCtrl.text);
     if (target == null || target < 2) return;
     final currentMin = int.tryParse(_minRepsCtrl.text);
-    if (currentMin == null || currentMin >= target) {
+    if (type == ProgressionSchemeType.doubleProgression &&
+        (currentMin == null || currentMin >= target)) {
+      _minRepsCtrl.text = (target - 4).clamp(1, target - 1).toString();
+    }
+    if (type == ProgressionSchemeType.linearPeriodization &&
+        (currentMin == null || currentMin >= target)) {
       _minRepsCtrl.text = (target - 4).clamp(1, target - 1).toString();
     }
   }
@@ -1218,28 +1278,45 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
     final minReps = int.tryParse(_minRepsCtrl.text);
     final targetReps = int.tryParse(_maxRepsCtrl.text);
     final weight = double.tryParse(_weightCtrl.text);
-    final usesRepRange = _usesRepRange(_type);
+    final usesTwoReps = _usesTwoRepValues(_type);
     final usesIncrement = _usesWeightIncrement(_type);
+    final usesPercent = _usesPercentIncrement(_type);
     final increment = usesIncrement
         ? double.tryParse(_incrementCtrl.text)
         : 0.0;
+    final percent = usesPercent ? double.tryParse(_percentCtrl.text) : null;
     if (sets == null ||
         targetReps == null ||
         weight == null ||
-        (usesRepRange && minReps == null) ||
+        (usesTwoReps && minReps == null) ||
         (usesIncrement && increment == null) ||
+        (usesPercent && percent == null) ||
         sets < 1 ||
         targetReps < 1 ||
-        (usesRepRange && minReps! < 1) ||
-        (usesRepRange && targetReps < minReps!) ||
+        (usesTwoReps && minReps! < 1) ||
         weight < 0 ||
-        (usesIncrement && increment! < 0)) {
+        (usesIncrement && increment! < 0) ||
+        (usesPercent && percent! <= 0)) {
       setState(() {
         _error = widget.l10n.get('invalidConfig');
       });
       return;
     }
     final reps = _repsForSave(_type, minReps, targetReps);
+    if (_type == ProgressionSchemeType.doubleProgression &&
+        reps.max < reps.min) {
+      setState(() {
+        _error = widget.l10n.get('invalidConfig');
+      });
+      return;
+    }
+    if (_type == ProgressionSchemeType.linearPeriodization &&
+        reps.max <= reps.min) {
+      setState(() {
+        _error = widget.l10n.get('invalidConfig');
+      });
+      return;
+    }
     Navigator.pop(
       context,
       widget.exercise.copyWith(
@@ -1251,7 +1328,7 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
           type: _type,
           weightIncrementKg: usesIncrement ? increment! : 0.0,
           percentIncrement: _type == ProgressionSchemeType.linearPeriodization
-              ? 2.5
+              ? percent!
               : widget.exercise.progressionScheme.percentIncrement,
         ),
       ),
@@ -1259,23 +1336,21 @@ class _ProgramExerciseDialogState extends State<_ProgramExerciseDialog> {
   }
 }
 
-bool _usesRepRange(ProgressionSchemeType type) {
-  return type == ProgressionSchemeType.doubleProgression;
+bool _usesTwoRepValues(ProgressionSchemeType type) {
+  return type == ProgressionSchemeType.doubleProgression ||
+      type == ProgressionSchemeType.linearPeriodization;
 }
 
 ({int min, int max}) _repsForSave(
   ProgressionSchemeType type,
   int? minReps,
-  int targetReps,
+  int reps,
 ) {
-  if (_usesRepRange(type)) return (min: minReps!, max: targetReps);
   if (type == ProgressionSchemeType.linearPeriodization) {
-    return (
-      min: (targetReps - 4).clamp(1, targetReps).toInt(),
-      max: targetReps,
-    );
+    return (min: minReps!, max: reps);
   }
-  return (min: targetReps, max: targetReps);
+  if (_usesTwoRepValues(type)) return (min: minReps!, max: reps);
+  return (min: reps, max: reps);
 }
 
 bool _usesWeightIncrement(ProgressionSchemeType type) {
@@ -1283,18 +1358,20 @@ bool _usesWeightIncrement(ProgressionSchemeType type) {
     ProgressionSchemeType.doubleProgression ||
     ProgressionSchemeType.linearWeight => true,
     ProgressionSchemeType.fixedLoad ||
-    ProgressionSchemeType.linearPeriodization ||
-    ProgressionSchemeType.periodized => false,
+    ProgressionSchemeType.linearPeriodization => false,
   };
+}
+
+bool _usesPercentIncrement(ProgressionSchemeType type) {
+  return type == ProgressionSchemeType.linearPeriodization;
 }
 
 String? _progressionHintKey(ProgressionSchemeType type) {
   return switch (type) {
     ProgressionSchemeType.doubleProgression => 'doubleProgressionHint',
+    ProgressionSchemeType.linearWeight => 'linearWeightHint',
     ProgressionSchemeType.fixedLoad => 'fixedLoadHint',
     ProgressionSchemeType.linearPeriodization => 'linearPeriodizationHint',
-    ProgressionSchemeType.periodized => 'periodizedHint',
-    ProgressionSchemeType.linearWeight => null,
   };
 }
 
@@ -1314,7 +1391,7 @@ String _programExerciseSubtitle(ProgramExercise exercise, L10n l10n) {
     'weight': exercise.startingWeightKg.toStringAsFixed(1),
     'scheme': schemeLabel,
     'inc': scheme.weightIncrementKg.toStringAsFixed(1),
-    'percent': '2.5',
+    'percent': scheme.percentIncrement.toStringAsFixed(1),
   };
 
   final key = switch (scheme.type) {
@@ -1330,8 +1407,13 @@ String _programExerciseSubtitle(ProgramExercise exercise, L10n l10n) {
 }
 
 String _repsSummary(ProgramExercise exercise) {
-  if (_usesRepRange(exercise.progressionScheme.type)) {
+  if (exercise.progressionScheme.type ==
+      ProgressionSchemeType.doubleProgression) {
     return '${exercise.minReps}-${exercise.maxReps}';
+  }
+  if (exercise.progressionScheme.type ==
+      ProgressionSchemeType.linearPeriodization) {
+    return '${exercise.maxReps}->${exercise.minReps}';
   }
   return exercise.maxReps.toString();
 }
@@ -1344,6 +1426,5 @@ String _progressionSchemeLabel(ProgressionSchemeType type, L10n l10n) {
     ProgressionSchemeType.linearPeriodization => l10n.get(
       'progLinearPeriodization',
     ),
-    ProgressionSchemeType.periodized => l10n.get('progPeriodized'),
   };
 }

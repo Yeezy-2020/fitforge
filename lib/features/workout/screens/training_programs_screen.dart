@@ -7,6 +7,7 @@ import '../../../data/models/exercise.dart';
 import '../../../data/models/training_program.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
+import 'program_activation_dialog.dart';
 import 'program_detail_screen.dart';
 
 String _newId() {
@@ -147,15 +148,13 @@ class _TrainingProgramsScreenState
     controller.dispose();
     if (name == null || name.isEmpty) return;
 
-    final existing = ref.read(trainingProgramsProvider).valueOrNull ?? [];
     final now = DateTime.now();
-    final active = !existing.any((p) => p.active);
     final program = TrainingProgram(
       id: _newId(),
       userId: userId,
       name: name,
-      active: active,
-      activatedAt: active ? now : null,
+      active: false,
+      activatedAt: null,
       activatedDayIndex: 0,
       createdAt: now,
       updatedAt: now,
@@ -172,15 +171,13 @@ class _TrainingProgramsScreenState
     final l10n = ref.read(l10nProvider);
     final userId = ref.read(currentUserIdProvider);
     if (userId.isEmpty) return;
-    final existing = ref.read(trainingProgramsProvider).valueOrNull ?? [];
     final now = DateTime.now();
-    final active = !existing.any((p) => p.active);
     final program = TrainingProgram(
       id: _newId(),
       userId: userId,
       name: l10n.get('starterPPL'),
-      active: active,
-      activatedAt: active ? now : null,
+      active: false,
+      activatedAt: null,
       activatedDayIndex: 0,
       createdAt: now,
       updatedAt: now,
@@ -294,7 +291,20 @@ class _TrainingProgramsScreenState
   }
 
   Future<void> _setActive(TrainingProgram program) async {
-    await ref.read(trainingProgramsProvider.notifier).setActive(program.id);
+    final l10n = ref.read(l10nProvider);
+    final config = await showProgramActivationDialog(
+      context: context,
+      l10n: l10n,
+      program: program,
+    );
+    if (config == null) return;
+    await ref
+        .read(trainingProgramsProvider.notifier)
+        .setActive(
+          program.id,
+          activatedAt: config.activatedAt,
+          plannedCycleCount: config.cycleCount,
+        );
   }
 
   Future<void> _deleteProgram(TrainingProgram program) async {
@@ -388,10 +398,7 @@ class _ProgramCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      l10n.format('programCardSummary', {
-                        'days': program.days.length.toString(),
-                        'training': trainingDays.toString(),
-                      }),
+                      _summary(trainingDays),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.grey,
                       ),
@@ -434,5 +441,19 @@ class _ProgramCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _summary(int trainingDays) {
+    final base = l10n.format('programCardSummary', {
+      'days': program.days.length.toString(),
+      'training': trainingDays.toString(),
+    });
+    final cycles = program.plannedCycleCount;
+    if (!program.active || cycles == null) return base;
+    final end = program.plannedEndDate();
+    if (end == null) {
+      return '$base · ${l10n.format('plannedCycles', {'count': cycles.toString()})}';
+    }
+    return '$base · ${l10n.format('plannedThrough', {'date': l10n.shortDate(end)})}';
   }
 }

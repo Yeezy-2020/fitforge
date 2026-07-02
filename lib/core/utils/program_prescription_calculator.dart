@@ -25,6 +25,7 @@ class ProgramPrescriptionCalculator {
     required String programDayId,
     required WorkoutLog? lastLog,
   }) {
+    final scheme = programExercise.progressionScheme;
     if (lastLog == null) {
       final bounds = _repBounds(programExercise);
       return WorkoutPrescription(
@@ -33,13 +34,13 @@ class ProgramPrescriptionCalculator {
         programExerciseId: programExercise.id,
         exerciseId: programExercise.exerciseId,
         sets: _clampSets(programExercise.targetSets),
-        reps: bounds.min,
+        reps: scheme.type == ProgressionSchemeType.linearPeriodization
+            ? bounds.max
+            : bounds.min,
         weightKg: _clampWeight(programExercise.startingWeightKg),
         reason: 'Start from program',
       );
     }
-
-    final scheme = programExercise.progressionScheme;
 
     switch (scheme.type) {
       case ProgressionSchemeType.doubleProgression:
@@ -67,8 +68,6 @@ class ProgramPrescriptionCalculator {
           programId,
           programDayId,
         );
-      case ProgressionSchemeType.periodized:
-        return _periodized(programExercise, lastLog, programId, programDayId);
     }
   }
 
@@ -149,34 +148,32 @@ class ProgramPrescriptionCalculator {
     String programId,
     String programDayId,
   ) {
-    const percent = 2.5;
+    final bounds = _repBounds(ex);
+    final percent = ex.progressionScheme.percentIncrement > 0
+        ? ex.progressionScheme.percentIncrement
+        : 2.5;
+    final currentReps = lastLog.reps.clamp(bounds.min, bounds.max).toInt();
+    if (currentReps <= bounds.min) {
+      return WorkoutPrescription(
+        programId: programId,
+        programDayId: programDayId,
+        programExerciseId: ex.id,
+        exerciseId: ex.exerciseId,
+        sets: _clampSets(lastLog.sets),
+        reps: bounds.min,
+        weightKg: _clampWeight(lastLog.weightKg),
+        reason: 'Final reps reached. Keep load and reps',
+      );
+    }
     return WorkoutPrescription(
       programId: programId,
       programDayId: programDayId,
       programExerciseId: ex.id,
       exerciseId: ex.exerciseId,
       sets: _clampSets(lastLog.sets),
-      reps: _clampRepsToRange(lastLog.reps - 1, ex),
+      reps: (currentReps - 1).clamp(bounds.min, bounds.max).toInt(),
       weightKg: _clampWeight(lastLog.weightKg * (1 + percent / 100)),
-      reason: '+$percent% load and -1 rep for linear periodization',
-    );
-  }
-
-  WorkoutPrescription _periodized(
-    ProgramExercise ex,
-    WorkoutLog lastLog,
-    String programId,
-    String programDayId,
-  ) {
-    return WorkoutPrescription(
-      programId: programId,
-      programDayId: programDayId,
-      programExerciseId: ex.id,
-      exerciseId: ex.exerciseId,
-      sets: _clampSets(lastLog.sets),
-      reps: _clampReps(lastLog.reps),
-      weightKg: _clampWeight(lastLog.weightKg),
-      reason: 'Keep last session values',
+      reason: '+$percent% load and -1 rep for the next program cycle',
     );
   }
 }
