@@ -871,6 +871,40 @@ void main() {
       expect(advanced.currentDay, isNull);
     });
 
+    test('endExecution stops projection and clears pauses', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        active: true,
+        activatedAt: DateTime(2025, 6, 1),
+        activatedDayIndex: 0,
+        plannedCycleCount: 3,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+          ProgramDay(id: 'd3', name: 'Rest', kind: DayKind.rest),
+        ],
+      ).pauseFrom(DateTime(2025, 6, 5), now: DateTime(2025, 6, 5));
+
+      final ended = program.endExecution(endedAt: DateTime(2025, 6, 6));
+
+      expect(ended.active, false);
+      expect(ended.pausePeriods, isEmpty);
+      expect(ended.updatedAt, DateTime(2025, 6, 6));
+      expect(ended.days.length, 3);
+      expect(ended.programDayForDate(DateTime(2025, 6, 1)), isNull);
+      expect(
+        ended.programDayForWorkoutDate(
+          DateTime(2025, 6, 6),
+          today: DateTime(2025, 6, 6),
+        ),
+        isNull,
+      );
+    });
+
     test('removeDayAt keeps current day stable when deleting before it', () {
       final program = TrainingProgram(
         id: 'prog1',

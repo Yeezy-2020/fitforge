@@ -269,12 +269,23 @@ class AppDatabase {
         plannedCycleCount: activating
             ? plannedCycleCount
             : program.plannedCycleCount,
+        pausePeriods: activating ? const [] : program.pausePeriods,
         updatedAt: activating ? now : program.updatedAt,
       );
       programs[i] = activating
           ? _withActivationMetadata(updated, now)
           : updated;
     }
+    await saveTrainingPrograms(userId, programs);
+  }
+
+  Future<void> endTrainingProgram(String userId, String programId) async {
+    final programs = await getTrainingPrograms(userId);
+    final idx = programs.indexWhere((p) => p.id == programId);
+    if (idx < 0) return;
+    final program = programs[idx];
+    if (!program.active && program.pausePeriods.isEmpty) return;
+    programs[idx] = program.endExecution();
     await saveTrainingPrograms(userId, programs);
   }
 

@@ -36,12 +36,20 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
         final cycles = int.tryParse(cyclesController.text.trim());
         final canPreview =
             cycles != null && cycles > 0 && program.days.isNotEmpty;
+        final totalDays = canPreview ? program.days.length * cycles : 0;
         final preview = canPreview
             ? l10n.format('activationSchedulePreview', {
                 'start': l10n.shortDate(startDate),
                 'end': l10n.shortDate(projectedEndDate(cycles)),
               })
             : l10n.get('activationScheduleNeedsDays');
+        final lengthPreview = canPreview
+            ? l10n.format('activationScheduleLength', {
+                'days': program.days.length.toString(),
+                'cycles': cycles.toString(),
+                'total': totalDays.toString(),
+              })
+            : null;
 
         return AlertDialog(
           title: Text(l10n.get('activateProgram')),
@@ -85,6 +93,13 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
                 onChanged: (_) => setDialogState(() => errorText = null),
               ),
               const SizedBox(height: 12),
+              if (lengthPreview != null) ...[
+                Text(
+                  lengthPreview,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+              ],
               Text(preview, style: Theme.of(context).textTheme.bodySmall),
             ],
           ),

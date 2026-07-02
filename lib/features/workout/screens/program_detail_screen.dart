@@ -71,11 +71,17 @@ class ProgramDetailScreen extends ConsumerWidget {
               _ProgramHeader(
                 program: program,
                 l10n: l10n,
+                onActivate: !program.active
+                    ? () => _setActiveProgram(context, ref, program, l10n)
+                    : null,
                 onPause: program.active
                     ? () => _pauseProgram(context, ref, program, l10n)
                     : null,
                 onResume: program.active
                     ? () => _resumeProgram(context, ref, program, l10n)
+                    : null,
+                onEnd: program.active
+                    ? () => _endProgram(context, ref, program, l10n)
                     : null,
               ),
               const SizedBox(height: 12),
@@ -221,6 +227,41 @@ class ProgramDetailScreen extends ConsumerWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.get('programPaused'))));
+  }
+
+  static Future<void> _endProgram(
+    BuildContext context,
+    WidgetRef ref,
+    TrainingProgram program,
+    L10n l10n,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.get('endProgram')),
+        content: Text(l10n.get('endProgramConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.get('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: Text(l10n.get('endProgram')),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await ref.read(trainingProgramsProvider.notifier).end(program.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.get('programEnded'))));
   }
 
   static Future<void> _resumeProgram(
@@ -564,14 +605,18 @@ class ProgramDetailScreen extends ConsumerWidget {
 class _ProgramHeader extends StatelessWidget {
   final TrainingProgram program;
   final L10n l10n;
+  final VoidCallback? onActivate;
   final VoidCallback? onPause;
   final VoidCallback? onResume;
+  final VoidCallback? onEnd;
 
   const _ProgramHeader({
     required this.program,
     required this.l10n,
+    required this.onActivate,
     required this.onPause,
     required this.onResume,
+    required this.onEnd,
   });
 
   @override
@@ -625,18 +670,6 @@ class _ProgramHeader extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (program.active)
-                  isPaused
-                      ? FilledButton.icon(
-                          onPressed: onResume,
-                          icon: const Icon(Icons.play_arrow, size: 18),
-                          label: Text(l10n.get('resumeProgram')),
-                        )
-                      : OutlinedButton.icon(
-                          onPressed: onPause,
-                          icon: const Icon(Icons.pause, size: 18),
-                          label: Text(l10n.get('pauseProgram')),
-                        ),
               ],
             ),
             const SizedBox(height: 8),
@@ -669,6 +702,40 @@ class _ProgramHeader extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (!program.active)
+                  FilledButton.icon(
+                    onPressed: onActivate,
+                    icon: const Icon(Icons.play_arrow, size: 18),
+                    label: Text(l10n.get('activateProgram')),
+                  ),
+                if (program.active)
+                  isPaused
+                      ? FilledButton.icon(
+                          onPressed: onResume,
+                          icon: const Icon(Icons.play_arrow, size: 18),
+                          label: Text(l10n.get('resumeProgram')),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: onPause,
+                          icon: const Icon(Icons.pause, size: 18),
+                          label: Text(l10n.get('pauseProgram')),
+                        ),
+                if (program.active)
+                  OutlinedButton.icon(
+                    onPressed: onEnd,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                    ),
+                    icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                    label: Text(l10n.get('endProgram')),
+                  ),
+              ],
+            ),
           ],
         ),
       ),

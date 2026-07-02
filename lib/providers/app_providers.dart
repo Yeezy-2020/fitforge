@@ -373,6 +373,12 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }
 
+  Future<void> end(String programId) async {
+    final userId = ref.read(currentUserIdProvider);
+    await AppDatabase.instance.endTrainingProgram(userId, programId);
+    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+  }
+
   Future<void> advanceDay() async {
     final userId = ref.read(currentUserIdProvider);
     final program = await AppDatabase.instance.getActiveTrainingProgram(userId);

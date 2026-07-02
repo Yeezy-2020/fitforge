@@ -496,6 +496,12 @@ class TrainingProgram {
     );
   }
 
+  TrainingProgram endExecution({DateTime? endedAt}) => copyWith(
+    active: false,
+    pausePeriods: const [],
+    updatedAt: endedAt ?? DateTime.now(),
+  );
+
   TrainingProgram removeDayAt(int index, {DateTime? removedAt}) {
     if (index < 0 || index >= days.length) return this;
 
