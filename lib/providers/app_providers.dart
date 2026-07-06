@@ -346,14 +346,22 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
     return AppDatabase.instance.getTrainingPrograms(userId);
   }
 
+  bool _matchesCurrentUser(String? expectedUserId) {
+    final userId = ref.read(currentUserIdProvider);
+    return userId.isNotEmpty &&
+        (expectedUserId == null || expectedUserId == userId);
+  }
+
   Future<void> save(TrainingProgram program) async {
     final userId = ref.read(currentUserIdProvider);
+    if (!_matchesCurrentUser(program.userId)) return;
     await AppDatabase.instance.saveTrainingProgram(userId, program);
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }
 
-  Future<void> delete(String programId) async {
+  Future<void> delete(String programId, {String? expectedUserId}) async {
     final userId = ref.read(currentUserIdProvider);
+    if (!_matchesCurrentUser(expectedUserId)) return;
     await AppDatabase.instance.deleteTrainingProgram(userId, programId);
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }
@@ -361,9 +369,11 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
   Future<void> setActive(
     String programId, {
     DateTime? activatedAt,
-    int? plannedCycleCount,
+    required int? plannedCycleCount,
+    String? expectedUserId,
   }) async {
     final userId = ref.read(currentUserIdProvider);
+    if (!_matchesCurrentUser(expectedUserId)) return;
     await AppDatabase.instance.setActiveTrainingProgram(
       userId,
       programId,
@@ -373,8 +383,9 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }
 
-  Future<void> end(String programId) async {
+  Future<void> end(String programId, {String? expectedUserId}) async {
     final userId = ref.read(currentUserIdProvider);
+    if (!_matchesCurrentUser(expectedUserId)) return;
     await AppDatabase.instance.endTrainingProgram(userId, programId);
     state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
   }

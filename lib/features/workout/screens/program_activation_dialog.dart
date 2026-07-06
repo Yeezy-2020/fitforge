@@ -6,13 +6,15 @@ import '../../../data/models/training_program.dart';
 
 class ProgramActivationConfig {
   final DateTime activatedAt;
-  final int cycleCount;
+  final int? cycleCount;
 
   const ProgramActivationConfig({
     required this.activatedAt,
     required this.cycleCount,
   });
 }
+
+enum _ActivationDurationMode { finite, continuous }
 
 Future<ProgramActivationConfig?> showProgramActivationDialog({
   required BuildContext context,
@@ -24,6 +26,9 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
   final cyclesController = TextEditingController(
     text: (program.plannedCycleCount ?? 4).toString(),
   );
+  var durationMode = program.plannedCycleCount == null
+      ? _ActivationDurationMode.continuous
+      : _ActivationDurationMode.finite;
   String? errorText;
 
   DateTime projectedEndDate(int cycles) =>
@@ -35,15 +40,30 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
       builder: (dialogContext, setDialogState) {
         final cycles = int.tryParse(cyclesController.text.trim());
         final canPreview =
-            cycles != null && cycles > 0 && program.days.isNotEmpty;
+            durationMode == _ActivationDurationMode.finite &&
+            cycles != null &&
+            cycles > 0 &&
+            program.days.isNotEmpty;
         final totalDays = canPreview ? program.days.length * cycles : 0;
-        final preview = canPreview
+        final preview = program.days.isEmpty
+            ? l10n.get('activationScheduleNeedsDays')
+            : durationMode == _ActivationDurationMode.continuous
+            ? l10n.format('activationScheduleContinuousPreview', {
+                'start': l10n.shortDate(startDate),
+              })
+            : canPreview
             ? l10n.format('activationSchedulePreview', {
                 'start': l10n.shortDate(startDate),
                 'end': l10n.shortDate(projectedEndDate(cycles)),
               })
-            : l10n.get('activationScheduleNeedsDays');
-        final lengthPreview = canPreview
+            : l10n.get('invalidCycleCount');
+        final lengthPreview =
+            program.days.isNotEmpty &&
+                durationMode == _ActivationDurationMode.continuous
+            ? l10n.format('activationScheduleContinuousLength', {
+                'days': program.days.length.toString(),
+              })
+            : canPreview
             ? l10n.format('activationScheduleLength', {
                 'days': program.days.length.toString(),
                 'cycles': cycles.toString(),
@@ -53,55 +73,83 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
 
         return AlertDialog(
           title: Text(l10n.get('activateProgram')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(l10n.get('activateProgramHelp')),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.event),
-                label: Text(
-                  l10n.format('activationDateValue', {
-                    'date': l10n.shortDate(startDate),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(l10n.get('activateProgramHelp')),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.event),
+                  label: Text(
+                    l10n.format('activationDateValue', {
+                      'date': l10n.shortDate(startDate),
+                    }),
+                  ),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: dialogContext,
+                      helpText: l10n.get('activationDate'),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                      initialDate: startDate,
+                    );
+                    if (picked == null) return;
+                    setDialogState(() {
+                      startDate = DateTime(
+                        picked.year,
+                        picked.month,
+                        picked.day,
+                      );
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<_ActivationDurationMode>(
+                  segments: [
+                    ButtonSegment(
+                      value: _ActivationDurationMode.finite,
+                      label: Text(l10n.get('finiteCycles')),
+                      icon: const Icon(Icons.repeat),
+                    ),
+                    ButtonSegment(
+                      value: _ActivationDurationMode.continuous,
+                      label: Text(l10n.get('continuousDuration')),
+                      icon: const Icon(Icons.all_inclusive),
+                    ),
+                  ],
+                  selected: {durationMode},
+                  onSelectionChanged: (value) => setDialogState(() {
+                    durationMode = value.first;
+                    errorText = null;
                   }),
                 ),
-                onPressed: () async {
-                  final picked = await showDatePicker(
-                    context: dialogContext,
-                    helpText: l10n.get('activationDate'),
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2100),
-                    initialDate: startDate,
-                  );
-                  if (picked == null) return;
-                  setDialogState(() {
-                    startDate = DateTime(picked.year, picked.month, picked.day);
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: cyclesController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(
-                  labelText: l10n.get('programCycleCount'),
-                  helperText: l10n.get('programCycleCountHelp'),
-                  errorText: errorText,
-                ),
-                onChanged: (_) => setDialogState(() => errorText = null),
-              ),
-              const SizedBox(height: 12),
-              if (lengthPreview != null) ...[
-                Text(
-                  lengthPreview,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 4),
+                if (durationMode == _ActivationDurationMode.finite) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: cyclesController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      labelText: l10n.get('programCycleCount'),
+                      helperText: l10n.get('programCycleCountHelp'),
+                      errorText: errorText,
+                    ),
+                    onChanged: (_) => setDialogState(() => errorText = null),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                if (lengthPreview != null) ...[
+                  Text(
+                    lengthPreview,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                Text(preview, style: Theme.of(context).textTheme.bodySmall),
               ],
-              Text(preview, style: Theme.of(context).textTheme.bodySmall),
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -112,6 +160,17 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
               onPressed: program.days.isEmpty
                   ? null
                   : () {
+                      if (durationMode == _ActivationDurationMode.continuous) {
+                        Navigator.pop(
+                          dialogContext,
+                          ProgramActivationConfig(
+                            activatedAt: startDate,
+                            cycleCount: null,
+                          ),
+                        );
+                        return;
+                      }
+
                       final cycles = int.tryParse(cyclesController.text.trim());
                       if (cycles == null || cycles < 1) {
                         setDialogState(

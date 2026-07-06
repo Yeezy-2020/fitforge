@@ -9,6 +9,7 @@ import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import 'program_activation_dialog.dart';
 import 'program_detail_screen.dart';
+import 'program_settings_dialog.dart';
 
 String _newId() {
   _idSeq += 1;
@@ -121,41 +122,25 @@ class _TrainingProgramsScreenState
     final userId = ref.read(currentUserIdProvider);
     if (userId.isEmpty) return;
 
-    final controller = TextEditingController(
-      text: l10n.get('blankProgramName'),
-    );
-    final name = await showDialog<String>(
+    final settings = await showProgramSettingsDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.get('createBlankProgram')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: l10n.get('programName')),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.get('cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(l10n.get('createProgram')),
-          ),
-        ],
-      ),
+      l10n: l10n,
+      title: l10n.get('createBlankProgram'),
+      initialName: l10n.get('blankProgramName'),
+      initialCycleCount: null,
+      confirmLabel: l10n.get('createProgram'),
     );
-    controller.dispose();
-    if (name == null || name.isEmpty) return;
+    if (settings == null) return;
 
     final now = DateTime.now();
     final program = TrainingProgram(
       id: _newId(),
       userId: userId,
-      name: name,
+      name: settings.name,
       active: false,
       activatedAt: null,
       activatedDayIndex: 0,
+      plannedCycleCount: settings.plannedCycleCount,
       createdAt: now,
       updatedAt: now,
     );
@@ -171,14 +156,25 @@ class _TrainingProgramsScreenState
     final l10n = ref.read(l10nProvider);
     final userId = ref.read(currentUserIdProvider);
     if (userId.isEmpty) return;
+    final settings = await showProgramSettingsDialog(
+      context: context,
+      l10n: l10n,
+      title: l10n.get('createStarterProgram'),
+      initialName: l10n.get('starterPPL'),
+      initialCycleCount: null,
+      confirmLabel: l10n.get('createProgram'),
+      dayCount: 4,
+    );
+    if (settings == null) return;
     final now = DateTime.now();
     final program = TrainingProgram(
       id: _newId(),
       userId: userId,
-      name: l10n.get('starterPPL'),
+      name: settings.name,
       active: false,
       activatedAt: null,
       activatedDayIndex: 0,
+      plannedCycleCount: settings.plannedCycleCount,
       createdAt: now,
       updatedAt: now,
       days: [
@@ -262,32 +258,22 @@ class _TrainingProgramsScreenState
 
   Future<void> _renameProgram(TrainingProgram program) async {
     final l10n = ref.read(l10nProvider);
-    final controller = TextEditingController(text: program.name);
-    final name = await showDialog<String>(
+    final settings = await showProgramSettingsDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.get('renameProgram')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: l10n.get('programName')),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.get('cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(l10n.get('rename')),
-          ),
-        ],
-      ),
+      l10n: l10n,
+      title: l10n.get('editProgramSettings'),
+      initialName: program.name,
+      initialCycleCount: program.plannedCycleCount,
+      dayCount: program.days.length,
     );
-    if (name != null && name.isNotEmpty) {
-      final updated = program.copyWith(name: name, updatedAt: DateTime.now());
-      await ref.read(trainingProgramsProvider.notifier).save(updated);
-    }
+    if (settings == null) return;
+    final updated = program.copyWith(
+      name: settings.name,
+      plannedCycleCount: settings.plannedCycleCount,
+      clearPlannedCycleCount: settings.plannedCycleCount == null,
+      updatedAt: DateTime.now(),
+    );
+    await ref.read(trainingProgramsProvider.notifier).save(updated);
   }
 
   Future<void> _setActive(TrainingProgram program) async {
@@ -304,6 +290,7 @@ class _TrainingProgramsScreenState
           program.id,
           activatedAt: config.activatedAt,
           plannedCycleCount: config.cycleCount,
+          expectedUserId: program.userId,
         );
   }
 
@@ -330,7 +317,9 @@ class _TrainingProgramsScreenState
       ),
     );
     if (confirm == true) {
-      await ref.read(trainingProgramsProvider.notifier).delete(program.id);
+      await ref
+          .read(trainingProgramsProvider.notifier)
+          .delete(program.id, expectedUserId: program.userId);
     }
   }
 }
@@ -425,7 +414,7 @@ class _ProgramCard extends StatelessWidget {
                     ),
                   PopupMenuItem(
                     value: 'rename',
-                    child: Text(l10n.get('rename')),
+                    child: Text(l10n.get('editProgramSettings')),
                   ),
                   PopupMenuItem(
                     value: 'delete',
@@ -449,11 +438,13 @@ class _ProgramCard extends StatelessWidget {
       'training': trainingDays.toString(),
     });
     final cycles = program.plannedCycleCount;
-    if (!program.active || cycles == null) return base;
-    final end = program.plannedEndDate();
-    if (end == null) {
-      return '$base · ${l10n.format('plannedCycles', {'count': cycles.toString()})}';
+    if (cycles == null) {
+      return '$base · ${l10n.get('plannedContinuously')}';
     }
-    return '$base · ${l10n.format('plannedThrough', {'date': l10n.shortDate(end)})}';
+    final end = program.active ? program.plannedEndDate() : null;
+    final duration = end == null
+        ? l10n.format('plannedCycles', {'count': cycles.toString()})
+        : l10n.format('plannedThrough', {'date': l10n.shortDate(end)});
+    return '$base · $duration';
   }
 }

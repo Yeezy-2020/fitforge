@@ -307,6 +307,21 @@ void main() {
       expect(updated.plannedCycleCount, 8);
     });
 
+    test('copyWith can clear planned cycle count for continuous plans', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        plannedCycleCount: 8,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final updated = program.copyWith(clearPlannedCycleCount: true);
+
+      expect(updated.plannedCycleCount, isNull);
+    });
+
     test('supports "train 3, rest 1" cycle', () {
       final program = TrainingProgram(
         id: 'prog1',
@@ -436,6 +451,35 @@ void main() {
       expect(program.programDayForDate(DateTime(2025, 6, 9)), isNull);
       expect(program.plannedEndDate(), DateTime.utc(2025, 6, 8));
     });
+
+    test(
+      'programDayForDate repeats continuously with no planned cycle count',
+      () {
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          active: true,
+          activatedAt: DateTime(2025, 6, 1),
+          activatedDayIndex: 0,
+          plannedCycleCount: null,
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+            ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+            ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+            ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+          ],
+        );
+
+        expect(program.programDayForDate(DateTime(2025, 5, 31)), isNull);
+        expect(program.programDayForDate(DateTime(2025, 6, 1))?.name, 'Push');
+        expect(program.programDayForDate(DateTime(2025, 7, 1))?.name, 'Legs');
+        expect(program.programDayForDate(DateTime(2026, 1, 2))?.name, 'Rest');
+        expect(program.plannedEndDate(), isNull);
+      },
+    );
 
     test('extendable pause shifts finite planned end date', () {
       final program =

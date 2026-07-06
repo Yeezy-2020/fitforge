@@ -251,7 +251,7 @@ class AppDatabase {
     String userId,
     String programId, {
     DateTime? activatedAt,
-    int? plannedCycleCount,
+    required int? plannedCycleCount,
   }) async {
     final programs = await getTrainingPrograms(userId);
     if (!programs.any((p) => p.id == programId)) return;
@@ -269,6 +269,7 @@ class AppDatabase {
         plannedCycleCount: activating
             ? plannedCycleCount
             : program.plannedCycleCount,
+        clearPlannedCycleCount: activating && plannedCycleCount == null,
         pausePeriods: activating ? const [] : program.pausePeriods,
         updatedAt: activating ? now : program.updatedAt,
       );

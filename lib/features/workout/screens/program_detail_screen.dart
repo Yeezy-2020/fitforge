@@ -7,6 +7,7 @@ import '../../../core/localization/l10n.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
 import 'program_activation_dialog.dart';
+import 'program_settings_dialog.dart';
 
 int _idSeq = 0;
 
@@ -48,7 +49,7 @@ class ProgramDetailScreen extends ConsumerWidget {
             title: Text(program.name),
             actions: [
               IconButton(
-                tooltip: l10n.get('rename'),
+                tooltip: l10n.get('editProgramSettings'),
                 icon: const Icon(Icons.edit_outlined),
                 onPressed: () => _renameProgram(context, ref, program, l10n),
               ),
@@ -152,32 +153,25 @@ class ProgramDetailScreen extends ConsumerWidget {
     TrainingProgram program,
     L10n l10n,
   ) async {
-    final controller = TextEditingController(text: program.name);
-    final name = await showDialog<String>(
+    final settings = await showProgramSettingsDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.get('renameProgram')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: l10n.get('programName')),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.get('cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(l10n.get('save')),
-          ),
-        ],
-      ),
+      l10n: l10n,
+      title: l10n.get('editProgramSettings'),
+      initialName: program.name,
+      initialCycleCount: program.plannedCycleCount,
+      dayCount: program.days.length,
     );
-    if (name == null || name.isEmpty) return;
+    if (settings == null) return;
     await ref
         .read(trainingProgramsProvider.notifier)
-        .save(program.copyWith(name: name, updatedAt: DateTime.now()));
+        .save(
+          program.copyWith(
+            name: settings.name,
+            plannedCycleCount: settings.plannedCycleCount,
+            clearPlannedCycleCount: settings.plannedCycleCount == null,
+            updatedAt: DateTime.now(),
+          ),
+        );
   }
 
   static Future<void> _setActiveProgram(
@@ -198,6 +192,7 @@ class ProgramDetailScreen extends ConsumerWidget {
           program.id,
           activatedAt: config.activatedAt,
           plannedCycleCount: config.cycleCount,
+          expectedUserId: program.userId,
         );
   }
 
@@ -257,7 +252,9 @@ class ProgramDetailScreen extends ConsumerWidget {
       ),
     );
     if (confirm != true) return;
-    await ref.read(trainingProgramsProvider.notifier).end(program.id);
+    await ref
+        .read(trainingProgramsProvider.notifier)
+        .end(program.id, expectedUserId: program.userId);
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -639,6 +636,11 @@ class _ProgramHeader extends StatelessWidget {
         : l10n.get('program');
     final cycles = program.plannedCycleCount;
     final plannedEnd = program.plannedEndDate();
+    final durationText = cycles == null
+        ? l10n.get('plannedContinuously')
+        : program.active && plannedEnd != null
+        ? l10n.format('plannedThrough', {'date': l10n.shortDate(plannedEnd)})
+        : l10n.format('plannedCycles', {'count': cycles.toString()});
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
@@ -689,19 +691,13 @@ class _ProgramHeader extends StatelessWidget {
                 color: theme.colorScheme.outline,
               ),
             ),
-            if (program.active && cycles != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                plannedEnd == null
-                    ? l10n.format('plannedCycles', {'count': cycles.toString()})
-                    : l10n.format('plannedThrough', {
-                        'date': l10n.shortDate(plannedEnd),
-                      }),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
-                ),
+            const SizedBox(height: 2),
+            Text(
+              durationText,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
               ),
-            ],
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,

@@ -546,6 +546,7 @@ class TrainingProgram {
     DateTime? activatedAt,
     int? activatedDayIndex,
     int? plannedCycleCount,
+    bool clearPlannedCycleCount = false,
     AdvanceMode? advanceMode,
     List<ProgramPausePeriod>? pausePeriods,
     DateTime? createdAt,
@@ -559,7 +560,9 @@ class TrainingProgram {
     currentDayIndex: currentDayIndex ?? this.currentDayIndex,
     activatedAt: activatedAt ?? this.activatedAt,
     activatedDayIndex: activatedDayIndex ?? this.activatedDayIndex,
-    plannedCycleCount: plannedCycleCount ?? this.plannedCycleCount,
+    plannedCycleCount: clearPlannedCycleCount
+        ? null
+        : plannedCycleCount ?? this.plannedCycleCount,
     advanceMode: advanceMode ?? this.advanceMode,
     pausePeriods: pausePeriods ?? this.pausePeriods,
     createdAt: createdAt ?? this.createdAt,
