@@ -682,12 +682,18 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
 
     if (prescriptions.isEmpty) return const SizedBox.shrink();
 
+    final isDeload = day.kind == DayKind.deload;
+    final theme = Theme.of(context);
+    final headerLabel = isDeload
+        ? '${l10n.get(_selectedDateIsToday ? 'todayProgram' : 'scheduledProgram')}: ${l10n.get('deloadDayLabel')} — ${day.name}'
+        : '${l10n.get(_selectedDateIsToday ? 'todayProgram' : 'scheduledProgram')}: ${day.name}';
+
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+        color: isDeload
+            ? Colors.teal.shade50
+            : theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -698,13 +704,21 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
             child: Row(
               children: [
-                const Icon(Icons.fitness_center, size: 16),
+                Icon(
+                  isDeload ? Icons.trending_down : Icons.fitness_center,
+                  size: 16,
+                  color: isDeload ? Colors.teal.shade700 : null,
+                ),
                 const SizedBox(width: 6),
-                Text(
-                  '${l10n.get(_selectedDateIsToday ? 'todayProgram' : 'scheduledProgram')}: ${day.name}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                Expanded(
+                  child: Text(
+                    headerLabel,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: isDeload ? Colors.teal.shade800 : null,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

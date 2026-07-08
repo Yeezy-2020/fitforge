@@ -344,8 +344,9 @@ class _ProgramCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final trainingDays = program.days
-        .where((d) => d.kind == DayKind.training)
+    final trainingDays = program.days.where((d) => d.isTrainingLike).length;
+    final deloadDays = program.days
+        .where((d) => d.kind == DayKind.deload)
         .length;
 
     return Card(
@@ -392,6 +393,41 @@ class _ProgramCard extends StatelessWidget {
                         color: Colors.grey,
                       ),
                     ),
+                    if (deloadDays > 0) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.trending_down,
+                              size: 13,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.format('programCardDeloadBadge', {
+                                'count': deloadDays.toString(),
+                              }),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

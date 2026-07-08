@@ -142,6 +142,18 @@ void main() {
       expect(restored.exercises, isEmpty);
     });
 
+    test('JSON roundtrip preserves deload day', () {
+      final day = ProgramDay(
+        id: 'pd_deload',
+        name: 'Deload',
+        kind: DayKind.deload,
+      );
+      final restored = ProgramDay.fromJson(day.toJson());
+      expect(restored.kind, DayKind.deload);
+      expect(restored.toJson()['kind'], 'deload');
+      expect(restored.isTrainingLike, isTrue);
+    });
+
     test('missing kind falls back to training', () {
       final day = ProgramDay.fromJson({'id': 'pd1', 'name': 'Unknown'});
       expect(day.kind, DayKind.training);
@@ -154,6 +166,126 @@ void main() {
         'kind': 'fun',
       });
       expect(day.kind, DayKind.training);
+    });
+  });
+
+  group('createDeloadDayFrom', () {
+    ProgramDay baseDay() => ProgramDay(
+      id: 'pd_base',
+      name: 'Push',
+      kind: DayKind.training,
+      exercises: [
+        ProgramExercise(
+          id: 'pe_bench',
+          exerciseId: 'ex_bench',
+          targetSets: 5,
+          minReps: 5,
+          maxReps: 9,
+          startingWeightKg: 82.35,
+          progressionScheme: const ProgressionScheme(
+            type: ProgressionSchemeType.linearWeight,
+            weightIncrementKg: 2.5,
+          ),
+          sortOrder: 2,
+        ),
+        ProgramExercise(
+          id: 'pe_press',
+          exerciseId: 'ex_press',
+          targetSets: 1,
+          minReps: 1,
+          maxReps: 2,
+          startingWeightKg: 40,
+          sortOrder: 1,
+        ),
+      ],
+    );
+
+    test(
+      'standard uses default 70 percent weight, unchanged sets and reps, fixed load, and new ids',
+      () {
+        final deload = createDeloadDayFrom(
+          baseDay: baseDay(),
+          id: 'pd_deload',
+          name: 'Deload Push',
+          exerciseIdBuilder: (index, source) => 'deload_${source.id}_$index',
+        );
+
+        expect(deload.id, 'pd_deload');
+        expect(deload.name, 'Deload Push');
+        expect(deload.kind, DayKind.deload);
+        expect(deload.exercises.length, 2);
+
+        final exercise = deload.exercises.first;
+        expect(exercise.id, 'deload_pe_bench_0');
+        expect(exercise.exerciseId, 'ex_bench');
+        expect(exercise.sortOrder, 2);
+        expect(exercise.startingWeightKg, 57.6);
+        expect(exercise.targetSets, 5);
+        expect(exercise.minReps, 5);
+        expect(exercise.maxReps, 9);
+        expect(
+          exercise.progressionScheme.type,
+          ProgressionSchemeType.fixedLoad,
+        );
+        expect(exercise.progressionScheme.weightIncrementKg, 0);
+      },
+    );
+
+    test(
+      'volume halves sets and reps with floor and clamp, leaving weight',
+      () {
+        final deload = createDeloadDayFrom(
+          baseDay: baseDay(),
+          id: 'pd_deload',
+          name: 'Volume Deload',
+          exerciseIdBuilder: (index, _) => 'deload_$index',
+          preset: DeloadDayPreset.volume,
+          weightPercent: 10,
+          setRatio: 0.1,
+        );
+
+        expect(deload.exercises.first.startingWeightKg, 82.35);
+        expect(deload.exercises.first.targetSets, 2);
+        expect(deload.exercises.first.minReps, 2);
+        expect(deload.exercises.first.maxReps, 4);
+        expect(deload.exercises.last.targetSets, 1);
+        expect(deload.exercises.last.minReps, 1);
+        expect(deload.exercises.last.maxReps, 1);
+      },
+    );
+
+    test(
+      'custom applies weight percent and set ratio while preserving reps',
+      () {
+        final deload = createDeloadDayFrom(
+          baseDay: baseDay(),
+          id: 'pd_deload',
+          name: 'Custom Deload',
+          exerciseIdBuilder: (index, _) => 'custom_$index',
+          preset: DeloadDayPreset.custom,
+          weightPercent: 55,
+          setRatio: 0.6,
+        );
+
+        final exercise = deload.exercises.first;
+        expect(exercise.startingWeightKg, 45.3);
+        expect(exercise.targetSets, 3);
+        expect(exercise.minReps, 5);
+        expect(exercise.maxReps, 9);
+        expect(deload.exercises.last.targetSets, 1);
+      },
+    );
+
+    test('empty base day creates empty deload day', () {
+      final deload = createDeloadDayFrom(
+        baseDay: ProgramDay(id: 'pd_empty', name: 'Empty'),
+        id: 'pd_deload',
+        name: 'Empty Deload',
+        exerciseIdBuilder: (index, _) => 'deload_$index',
+      );
+
+      expect(deload.kind, DayKind.deload);
+      expect(deload.exercises, isEmpty);
     });
   });
 
@@ -915,6 +1047,121 @@ void main() {
       expect(advanced.currentDay, isNull);
     });
 
+    test(
+      'insertDayAt keeps current day stable when inserting before or at current day',
+      () {
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: '3 on 1 off',
+          currentDayIndex: 1,
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+            ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+            ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+          ],
+        );
+        final deload = ProgramDay(
+          id: 'deload',
+          name: 'Deload',
+          kind: DayKind.deload,
+        );
+
+        final insertedBefore = program.insertDayAt(0, deload, insertedAt: now);
+        expect(insertedBefore.currentDayIndex, 2);
+        expect(insertedBefore.currentDay?.id, 'd2');
+
+        final insertedAt = program.insertDayAt(1, deload, insertedAt: now);
+        expect(insertedAt.currentDayIndex, 2);
+        expect(insertedAt.currentDay?.id, 'd2');
+      },
+    );
+
+    test('insertDayAt leaves current day stable when inserting after it', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: '3 on 1 off',
+        currentDayIndex: 1,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+        ],
+      );
+
+      final updated = program.insertDayAt(
+        99,
+        ProgramDay(id: 'deload', name: 'Deload', kind: DayKind.deload),
+        insertedAt: DateTime(2025, 6, 2),
+      );
+
+      expect(updated.currentDayIndex, 1);
+      expect(updated.currentDay?.id, 'd2');
+      expect(updated.updatedAt, DateTime(2025, 6, 2));
+    });
+
+    test(
+      'insertDayAt keeps activated day stable when inserting before or at activated day',
+      () {
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          activatedAt: now,
+          activatedDayIndex: 2,
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+            ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+            ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+          ],
+        );
+        final deload = ProgramDay(
+          id: 'deload',
+          name: 'Deload',
+          kind: DayKind.deload,
+        );
+
+        final insertedBefore = program.insertDayAt(1, deload, insertedAt: now);
+        expect(insertedBefore.activatedDayIndex, 3);
+        expect(insertedBefore.days[insertedBefore.activatedDayIndex].id, 'd3');
+
+        final insertedAt = program.insertDayAt(2, deload, insertedAt: now);
+        expect(insertedAt.activatedDayIndex, 3);
+        expect(insertedAt.days[insertedAt.activatedDayIndex].id, 'd3');
+      },
+    );
+
+    test('insertDayAt leaves activated day stable when inserting after it', () {
+      final program = TrainingProgram(
+        id: 'prog1',
+        userId: 'user1',
+        name: 'PPL',
+        activatedAt: now,
+        activatedDayIndex: 0,
+        createdAt: now,
+        updatedAt: now,
+        days: [
+          ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+          ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+        ],
+      );
+
+      final updated = program.insertDayAt(
+        2,
+        ProgramDay(id: 'deload', name: 'Deload', kind: DayKind.deload),
+        insertedAt: now,
+      );
+
+      expect(updated.activatedDayIndex, 0);
+      expect(updated.days[updated.activatedDayIndex].id, 'd1');
+    });
+
     test('endExecution stops projection and clears pauses', () {
       final program = TrainingProgram(
         id: 'prog1',
@@ -1233,21 +1480,24 @@ void main() {
       expect(rx.weightKg, 80);
     });
 
-    test('linear periodization adds cycle percent load and drops one rep', () {
-      final rx = calculate(
-        exercise(
-          type: ProgressionSchemeType.linearPeriodization,
-          minReps: 8,
-          maxReps: 12,
-        ),
-        log(reps: 10, weightKg: 100),
-      );
-      expect(rx.reps, 9);
-      expect(rx.weightKg, 102.5);
-    });
+    test(
+      'cycle load progression adds cycle percent load and drops one rep',
+      () {
+        final rx = calculate(
+          exercise(
+            type: ProgressionSchemeType.linearPeriodization,
+            minReps: 8,
+            maxReps: 12,
+          ),
+          log(reps: 10, weightKg: 100),
+        );
+        expect(rx.reps, 9);
+        expect(rx.weightKg, 102.5);
+      },
+    );
 
     test(
-      'linear periodization starts from start reps without previous log',
+      'cycle load progression starts from start reps without previous log',
       () {
         final rx = calculate(
           exercise(
@@ -1262,7 +1512,7 @@ void main() {
       },
     );
 
-    test('linear periodization uses configured percent increment', () {
+    test('cycle load progression uses configured percent increment', () {
       final rx = calculate(
         exercise(
           type: ProgressionSchemeType.linearPeriodization,
@@ -1276,7 +1526,7 @@ void main() {
       expect(rx.weightKg, 105);
     });
 
-    test('linear periodization stops load increases at final reps', () {
+    test('cycle load progression stops load increases at ending reps', () {
       final rx = calculate(
         exercise(
           type: ProgressionSchemeType.linearPeriodization,
@@ -1360,6 +1610,25 @@ void main() {
         shouldAdvanceProgram(
           currentDay: day,
           savedProgramExerciseIds: {'pe1', 'pe2'},
+        ),
+        isTrue,
+      );
+    });
+
+    test('advances for deload day when all planned exercise IDs are saved', () {
+      final day = ProgramDay(
+        id: 'pd_deload',
+        name: 'Deload',
+        kind: DayKind.deload,
+        exercises: [
+          ProgramExercise(id: 'deload_pe1', exerciseId: 'ex_bench'),
+          ProgramExercise(id: 'deload_pe2', exerciseId: 'ex_shoulder'),
+        ],
+      );
+      expect(
+        shouldAdvanceProgram(
+          currentDay: day,
+          savedProgramExerciseIds: {'deload_pe1', 'deload_pe2'},
         ),
         isTrue,
       );

@@ -162,7 +162,7 @@ class ProgramPrescriptionCalculator {
         sets: _clampSets(lastLog.sets),
         reps: bounds.min,
         weightKg: _clampWeight(lastLog.weightKg),
-        reason: 'Final reps reached. Keep load and reps',
+        reason: 'Cycle rep floor reached. Keep load and reps',
       );
     }
     return WorkoutPrescription(
@@ -173,7 +173,7 @@ class ProgramPrescriptionCalculator {
       sets: _clampSets(lastLog.sets),
       reps: (currentReps - 1).clamp(bounds.min, bounds.max).toInt(),
       weightKg: _clampWeight(lastLog.weightKg * (1 + percent / 100)),
-      reason: '+$percent% load and -1 rep for the next program cycle',
+      reason: '+$percent% load and -1 rep for the next plan cycle',
     );
   }
 }

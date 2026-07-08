@@ -16,6 +16,8 @@ String _newProgramId() {
   return '${DateTime.now().microsecondsSinceEpoch}_$_idSeq';
 }
 
+enum _DeloadInsertPosition { afterSelectedDay, endOfCycle }
+
 class ProgramDetailScreen extends ConsumerWidget {
   final String programId;
 
@@ -86,26 +88,45 @@ class ProgramDetailScreen extends ConsumerWidget {
                     : null,
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.fitness_center, size: 18),
-                      label: Text(l10n.get('trainingDayBtn')),
-                      onPressed: () =>
-                          _addDay(context, ref, program, false, l10n),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.hotel, size: 18),
-                      label: Text(l10n.get('restDayBtn')),
-                      onPressed: () =>
-                          _addDay(context, ref, program, true, l10n),
-                    ),
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth < 520 ? 1 : 3;
+                  final buttonWidth =
+                      (constraints.maxWidth - (8 * (columns - 1))) / columns;
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      SizedBox(
+                        width: buttonWidth,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.fitness_center, size: 18),
+                          label: Text(l10n.get('trainingDayBtn')),
+                          onPressed: () =>
+                              _addDay(context, ref, program, false, l10n),
+                        ),
+                      ),
+                      SizedBox(
+                        width: buttonWidth,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.hotel, size: 18),
+                          label: Text(l10n.get('restDayBtn')),
+                          onPressed: () =>
+                              _addDay(context, ref, program, true, l10n),
+                        ),
+                      ),
+                      SizedBox(
+                        width: buttonWidth,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.speed_outlined, size: 18),
+                          label: Text(l10n.get('addDeloadDay')),
+                          onPressed: () =>
+                              _addDeloadDay(context, ref, program, null, l10n),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
               for (var i = 0; i < program.days.length; i++) ...[
@@ -118,6 +139,8 @@ class ProgramDetailScreen extends ConsumerWidget {
                   l10n: l10n,
                   onEditDay: () => _editDay(context, ref, program, i, l10n),
                   onDeleteDay: () => _deleteDay(context, ref, program, i, l10n),
+                  onAddDeloadAfterDay: () =>
+                      _addDeloadDay(context, ref, program, i, l10n),
                   onAddExercise: () =>
                       _addExercise(context, ref, program, i, exercises, l10n),
                   onEditExercise: (exerciseIndex) => _editProgramExercise(
@@ -422,6 +445,12 @@ class ProgramDetailScreen extends ConsumerWidget {
                     label: Text(l10n.get('restSeg')),
                     icon: const Icon(Icons.hotel),
                   ),
+                  if (day.kind == DayKind.deload)
+                    ButtonSegment(
+                      value: DayKind.deload,
+                      label: Text(l10n.get('deloadDayLabel')),
+                      icon: const Icon(Icons.speed_outlined),
+                    ),
                 ],
                 selected: {kind},
                 onSelectionChanged: (value) =>
@@ -484,6 +513,67 @@ class ProgramDetailScreen extends ConsumerWidget {
     );
     if (confirm != true) return;
     await _saveProgram(ref, program.removeDayAt(dayIndex));
+  }
+
+  static Future<void> _addDeloadDay(
+    BuildContext context,
+    WidgetRef ref,
+    TrainingProgram program,
+    int? selectedDayIndex,
+    L10n l10n,
+  ) async {
+    final baseDays = _regularTrainingDays(program);
+    if (baseDays.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.get('noBaseTrainingDay'))));
+      return;
+    }
+
+    final initialInsertIndex = selectedDayIndex == null
+        ? program.days.length
+        : (selectedDayIndex + 1).clamp(0, program.days.length).toInt();
+    final initialBaseDay =
+        _defaultDeloadBaseDay(program, initialInsertIndex) ?? baseDays.first;
+    final result =
+        await showDialog<
+          ({
+            int insertIndex,
+            ProgramDay baseDay,
+            DeloadDayPreset preset,
+            double weightPercent,
+            double setRatio,
+          })
+        >(
+          context: context,
+          builder: (ctx) => _DeloadDayDialog(
+            program: program,
+            selectedDayIndex: selectedDayIndex,
+            baseDays: baseDays,
+            initialBaseDay: initialBaseDay,
+            l10n: l10n,
+          ),
+        );
+    if (result == null) return;
+
+    final deloadDay = createDeloadDayFrom(
+      baseDay: result.baseDay,
+      id: 'deload_${_newProgramId()}',
+      name: l10n.format('deloadDayName', {'name': result.baseDay.name}),
+      exerciseIdBuilder: (index, source) =>
+          'deload_${_newProgramId()}_${index}_${source.id}',
+      preset: result.preset,
+      weightPercent: result.weightPercent,
+      setRatio: result.setRatio,
+    );
+    await _saveProgram(
+      ref,
+      program.insertDayAt(
+        result.insertIndex,
+        deloadDay,
+        insertedAt: DateTime.now(),
+      ),
+    );
   }
 
   static Future<void> _addExercise(
@@ -599,6 +689,270 @@ class ProgramDetailScreen extends ConsumerWidget {
   }
 }
 
+class _DeloadDayDialog extends StatefulWidget {
+  final TrainingProgram program;
+  final int? selectedDayIndex;
+  final List<ProgramDay> baseDays;
+  final ProgramDay initialBaseDay;
+  final L10n l10n;
+
+  const _DeloadDayDialog({
+    required this.program,
+    required this.selectedDayIndex,
+    required this.baseDays,
+    required this.initialBaseDay,
+    required this.l10n,
+  });
+
+  @override
+  State<_DeloadDayDialog> createState() => _DeloadDayDialogState();
+}
+
+class _DeloadDayDialogState extends State<_DeloadDayDialog> {
+  final _weightPercentCtrl = TextEditingController(text: '70');
+  final _setRatioCtrl = TextEditingController(text: '100');
+  late _DeloadInsertPosition _position;
+  late ProgramDay _baseDay;
+  DeloadDayPreset _preset = DeloadDayPreset.standard;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.selectedDayIndex == null
+        ? _DeloadInsertPosition.endOfCycle
+        : _DeloadInsertPosition.afterSelectedDay;
+    _baseDay = widget.initialBaseDay;
+  }
+
+  @override
+  void dispose() {
+    _weightPercentCtrl.dispose();
+    _setRatioCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fields = <Widget>[
+      _insertPositionField(),
+      _baseDayField(),
+      _presetField(),
+      _summary(theme),
+      if (_preset == DeloadDayPreset.custom) _customFields(),
+      if (_error != null)
+        Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+    ];
+
+    return AlertDialog(
+      title: Text(widget.l10n.get('addDeloadDay')),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.l10n.get('deloadDayHelp'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+              const SizedBox(height: 16),
+              for (var i = 0; i < fields.length; i++) ...[
+                if (i > 0) const SizedBox(height: 12),
+                fields[i],
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(widget.l10n.get('cancel')),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: Text(widget.l10n.get('createDeloadDay')),
+        ),
+      ],
+    );
+  }
+
+  Widget _insertPositionField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.l10n.get('insertPosition')),
+        const SizedBox(height: 6),
+        SegmentedButton<_DeloadInsertPosition>(
+          segments: [
+            ButtonSegment(
+              value: _DeloadInsertPosition.afterSelectedDay,
+              label: Text(widget.l10n.get('afterSelectedDay')),
+            ),
+            ButtonSegment(
+              value: _DeloadInsertPosition.endOfCycle,
+              label: Text(widget.l10n.get('endOfCycle')),
+            ),
+          ],
+          selected: {_position},
+          onSelectionChanged: widget.selectedDayIndex == null
+              ? null
+              : (value) {
+                  final nextPosition = value.first;
+                  setState(() {
+                    _position = nextPosition;
+                    _baseDay =
+                        _defaultDeloadBaseDay(
+                          widget.program,
+                          _insertIndexFor(nextPosition),
+                        ) ??
+                        widget.baseDays.first;
+                    _error = null;
+                  });
+                },
+        ),
+      ],
+    );
+  }
+
+  Widget _baseDayField() {
+    return DropdownButtonFormField<ProgramDay>(
+      initialValue: _baseDay,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: widget.l10n.get('baseTrainingDay'),
+      ),
+      items: [
+        for (final day in widget.baseDays)
+          DropdownMenuItem(value: day, child: Text(day.name)),
+      ],
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _baseDay = value;
+          _error = null;
+        });
+      },
+    );
+  }
+
+  Widget _presetField() {
+    return DropdownButtonFormField<DeloadDayPreset>(
+      initialValue: _preset,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: widget.l10n.get('deloadPreset')),
+      items: [
+        DropdownMenuItem(
+          value: DeloadDayPreset.standard,
+          child: Text(widget.l10n.get('standardDeload')),
+        ),
+        DropdownMenuItem(
+          value: DeloadDayPreset.volume,
+          child: Text(widget.l10n.get('volumeDeload')),
+        ),
+        DropdownMenuItem(
+          value: DeloadDayPreset.custom,
+          child: Text(widget.l10n.get('customDeload')),
+        ),
+      ],
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() {
+          _preset = value;
+          _error = null;
+        });
+      },
+    );
+  }
+
+  Widget _summary(ThemeData theme) {
+    final key = switch (_preset) {
+      DeloadDayPreset.standard => 'standardDeloadSummary',
+      DeloadDayPreset.volume => 'volumeDeloadSummary',
+      DeloadDayPreset.custom => 'customDeloadSummary',
+    };
+    return Text(
+      widget.l10n.get(key),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.outline,
+      ),
+    );
+  }
+
+  Widget _customFields() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _weightPercentCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: widget.l10n.get('loadPercent'),
+              suffixText: '%',
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextField(
+            controller: _setRatioCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: widget.l10n.get('setRatio'),
+              suffixText: '%',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  int _insertIndexFor(_DeloadInsertPosition position) {
+    if (position == _DeloadInsertPosition.endOfCycle) {
+      return widget.program.days.length;
+    }
+    final selected = widget.selectedDayIndex;
+    if (selected == null) return widget.program.days.length;
+    return (selected + 1).clamp(0, widget.program.days.length).toInt();
+  }
+
+  void _save() {
+    final weightPercent = switch (_preset) {
+      DeloadDayPreset.standard => 70.0,
+      DeloadDayPreset.volume => 70.0,
+      DeloadDayPreset.custom => double.tryParse(_weightPercentCtrl.text),
+    };
+    final setRatio = switch (_preset) {
+      DeloadDayPreset.standard => 1.0,
+      DeloadDayPreset.volume => 0.5,
+      DeloadDayPreset.custom =>
+        (double.tryParse(_setRatioCtrl.text) ?? 0) / 100,
+    };
+
+    if (weightPercent == null ||
+        weightPercent <= 0 ||
+        weightPercent > 100 ||
+        setRatio <= 0 ||
+        setRatio > 1) {
+      setState(() => _error = widget.l10n.get('invalidConfig'));
+      return;
+    }
+
+    Navigator.pop(context, (
+      insertIndex: _insertIndexFor(_position),
+      baseDay: _baseDay,
+      preset: _preset,
+      weightPercent: weightPercent,
+      setRatio: setRatio,
+    ));
+  }
+}
+
 class _ProgramHeader extends StatelessWidget {
   final TrainingProgram program;
   final L10n l10n;
@@ -620,7 +974,7 @@ class _ProgramHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final trainingDays = program.days
-        .where((d) => d.kind == DayKind.training)
+        .where((d) => d.kind == DayKind.training || d.kind == DayKind.deload)
         .length;
     final restDays = program.days.length - trainingDays;
     final isPaused = program.isPausedNow();
@@ -748,6 +1102,7 @@ class _ProgramDaySection extends StatelessWidget {
   final L10n l10n;
   final VoidCallback onEditDay;
   final VoidCallback onDeleteDay;
+  final VoidCallback onAddDeloadAfterDay;
   final VoidCallback onAddExercise;
   final void Function(int exerciseIndex) onEditExercise;
   final void Function(int exerciseIndex) onRemoveExercise;
@@ -761,6 +1116,7 @@ class _ProgramDaySection extends StatelessWidget {
     required this.l10n,
     required this.onEditDay,
     required this.onDeleteDay,
+    required this.onAddDeloadAfterDay,
     required this.onAddExercise,
     required this.onEditExercise,
     required this.onRemoveExercise,
@@ -770,6 +1126,7 @@ class _ProgramDaySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isRest = day.kind == DayKind.rest;
+    final isDeload = day.kind == DayKind.deload;
     final sortedExercises = [...day.exercises]
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
@@ -783,9 +1140,15 @@ class _ProgramDaySection extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  isRest ? Icons.hotel : Icons.fitness_center,
+                  isRest
+                      ? Icons.hotel
+                      : isDeload
+                      ? Icons.speed_outlined
+                      : Icons.fitness_center,
                   size: 20,
-                  color: theme.colorScheme.primary,
+                  color: isDeload
+                      ? theme.colorScheme.secondary
+                      : theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -797,6 +1160,11 @@ class _ProgramDaySection extends StatelessWidget {
                     style: theme.textTheme.titleMedium,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                IconButton(
+                  tooltip: l10n.get('addDeloadDay'),
+                  icon: const Icon(Icons.playlist_add, size: 20),
+                  onPressed: onAddDeloadAfterDay,
                 ),
                 IconButton(
                   tooltip: l10n.get('editDay'),
@@ -817,6 +1185,15 @@ class _ProgramDaySection extends StatelessWidget {
               )
             else ...[
               const SizedBox(height: 8),
+              if (isDeload) ...[
+                Text(
+                  l10n.get('deloadDaySubtitle'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.secondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               if (sortedExercises.isEmpty)
                 Text(
                   l10n.get('noExercisesInDay'),
@@ -860,6 +1237,19 @@ class _ProgramDaySection extends StatelessWidget {
       ),
     );
   }
+}
+
+List<ProgramDay> _regularTrainingDays(TrainingProgram program) {
+  return program.days.where((day) => day.kind == DayKind.training).toList();
+}
+
+ProgramDay? _defaultDeloadBaseDay(TrainingProgram program, int insertIndex) {
+  final end = insertIndex.clamp(0, program.days.length).toInt();
+  for (var i = end - 1; i >= 0; i--) {
+    final day = program.days[i];
+    if (day.kind == DayKind.training) return day;
+  }
+  return _regularTrainingDays(program).firstOrNull;
 }
 
 class _ProgramExerciseTile extends StatelessWidget {

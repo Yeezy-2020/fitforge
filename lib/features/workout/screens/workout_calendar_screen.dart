@@ -381,7 +381,10 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                                           hasProgramDay)
                                         const SizedBox(width: 2),
                                       if (programDay != null)
-                                        _ProgramDayMarker(day: programDay),
+                                        _ProgramDayMarker(
+                                          day: programDay,
+                                          l10n: l10n,
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -465,7 +468,10 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                                   if (hasCycle && hasProgramDay)
                                     const SizedBox(width: 2),
                                   if (programDay != null)
-                                    _ProgramDayMarker(day: programDay),
+                                    _ProgramDayMarker(
+                                      day: programDay,
+                                      l10n: l10n,
+                                    ),
                                 ],
                               ),
                             ),
@@ -763,16 +769,33 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
 
 class _ProgramDayMarker extends StatelessWidget {
   final ProgramDay day;
+  final L10n l10n;
 
-  const _ProgramDayMarker({required this.day});
+  const _ProgramDayMarker({required this.day, required this.l10n});
 
   @override
   Widget build(BuildContext context) {
     final isRest = day.kind == DayKind.rest;
-    return Icon(
-      isRest ? Icons.hotel_outlined : Icons.fitness_center,
-      size: 11,
-      color: isRest ? Colors.blueGrey : Colors.deepPurple,
+    final isDeload = day.kind == DayKind.deload;
+    final label = isDeload
+        ? '${l10n.get('deloadDayLabel')}: ${day.name}'
+        : day.name;
+    return Tooltip(
+      message: label,
+      child: Icon(
+        isRest
+            ? Icons.hotel_outlined
+            : isDeload
+            ? Icons.trending_down
+            : Icons.fitness_center,
+        size: 11,
+        color: isRest
+            ? Colors.blueGrey
+            : isDeload
+            ? Colors.teal
+            : Colors.deepPurple,
+        semanticLabel: label,
+      ),
     );
   }
 }

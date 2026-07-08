@@ -5,9 +5,11 @@ enum ProgressionSchemeType {
   linearPeriodization,
 }
 
-enum DayKind { training, rest }
+enum DayKind { training, rest, deload }
 
 enum AdvanceMode { auto, manual }
+
+enum DeloadDayPreset { standard, volume, custom }
 
 ProgressionSchemeType _progressionSchemeTypeFromString(String? value) {
   switch (value) {
@@ -32,6 +34,8 @@ DayKind _dayKindFromString(String? value) {
       return DayKind.training;
     case 'rest':
       return DayKind.rest;
+    case 'deload':
+      return DayKind.deload;
     default:
       return DayKind.training;
   }
@@ -196,6 +200,8 @@ class ProgramDay {
     'exercises': exercises.map((e) => e.toJson()).toList(),
   };
 
+  bool get isTrainingLike => kind == DayKind.training || kind == DayKind.deload;
+
   ProgramDay copyWith({
     String? id,
     String? name,
@@ -206,6 +212,66 @@ class ProgramDay {
     name: name ?? this.name,
     kind: kind ?? this.kind,
     exercises: exercises ?? this.exercises,
+  );
+}
+
+ProgramDay createDeloadDayFrom({
+  required ProgramDay baseDay,
+  required String id,
+  required String name,
+  required String Function(int index, ProgramExercise source) exerciseIdBuilder,
+  DeloadDayPreset preset = DeloadDayPreset.standard,
+  double weightPercent = 70,
+  double setRatio = 1,
+}) {
+  int atLeastOne(int value) => value < 1 ? 1 : value;
+  double roundOneDecimal(double value) => (value * 10).roundToDouble() / 10;
+
+  final exercises = <ProgramExercise>[];
+  for (var i = 0; i < baseDay.exercises.length; i += 1) {
+    final source = baseDay.exercises[i];
+    final targetWeight = switch (preset) {
+      DeloadDayPreset.volume => source.startingWeightKg,
+      DeloadDayPreset.standard || DeloadDayPreset.custom => roundOneDecimal(
+        source.startingWeightKg * weightPercent / 100,
+      ),
+    };
+    final targetSets = switch (preset) {
+      DeloadDayPreset.volume => atLeastOne(source.targetSets ~/ 2),
+      DeloadDayPreset.standard => source.targetSets,
+      DeloadDayPreset.custom => atLeastOne(
+        (source.targetSets * setRatio).floor(),
+      ),
+    };
+    final targetMinReps = switch (preset) {
+      DeloadDayPreset.volume => atLeastOne(source.minReps ~/ 2),
+      DeloadDayPreset.standard || DeloadDayPreset.custom => source.minReps,
+    };
+    final targetMaxReps = switch (preset) {
+      DeloadDayPreset.volume => atLeastOne(source.maxReps ~/ 2),
+      DeloadDayPreset.standard || DeloadDayPreset.custom => source.maxReps,
+    };
+
+    exercises.add(
+      source.copyWith(
+        id: exerciseIdBuilder(i, source),
+        targetSets: targetSets,
+        minReps: targetMinReps,
+        maxReps: targetMaxReps,
+        startingWeightKg: targetWeight,
+        progressionScheme: const ProgressionScheme(
+          type: ProgressionSchemeType.fixedLoad,
+          weightIncrementKg: 0,
+        ),
+      ),
+    );
+  }
+
+  return ProgramDay(
+    id: id,
+    name: name,
+    kind: DayKind.deload,
+    exercises: exercises,
   );
 }
 
@@ -502,6 +568,36 @@ class TrainingProgram {
     updatedAt: endedAt ?? DateTime.now(),
   );
 
+  TrainingProgram insertDayAt(
+    int index,
+    ProgramDay day, {
+    DateTime? insertedAt,
+  }) {
+    final insertIndex = index.clamp(0, days.length).toInt();
+    final nextDays = [...days]..insert(insertIndex, day);
+    var nextCurrentIndex = 0;
+    var nextActivatedIndex = 0;
+
+    if (days.isNotEmpty) {
+      final normalized = normalizedCurrentDayIndex;
+      nextCurrentIndex = insertIndex <= normalized
+          ? normalized + 1
+          : normalized;
+
+      final normalizedActivated = normalizedActivatedDayIndex;
+      nextActivatedIndex = insertIndex <= normalizedActivated
+          ? normalizedActivated + 1
+          : normalizedActivated;
+    }
+
+    return copyWith(
+      days: nextDays,
+      currentDayIndex: nextCurrentIndex,
+      activatedDayIndex: nextActivatedIndex,
+      updatedAt: insertedAt ?? DateTime.now(),
+    );
+  }
+
   TrainingProgram removeDayAt(int index, {DateTime? removedAt}) {
     if (index < 0 || index >= days.length) return this;
 
@@ -770,8 +866,8 @@ class WorkoutPrescription {
 }
 
 /// Returns true when all required [ProgramExercise.id]s in [currentDay] are
-/// present in [savedProgramExerciseIds] and [currentDay] is a training day
-/// with at least one exercise.
+/// present in [savedProgramExerciseIds] and [currentDay] is training-like with
+/// at least one exercise.
 bool shouldAdvanceProgram({
   required ProgramDay? currentDay,
   required Set<String> savedProgramExerciseIds,
@@ -781,7 +877,7 @@ bool shouldAdvanceProgram({
   if (advanceMode != AdvanceMode.auto) return false;
   if (!selectedDateIsToday) return false;
   if (currentDay == null) return false;
-  if (currentDay.kind != DayKind.training) return false;
+  if (!currentDay.isTrainingLike) return false;
   if (currentDay.exercises.isEmpty) return false;
   if (savedProgramExerciseIds.isEmpty) return false;
   final requiredIds = currentDay.exercises.map((e) => e.id).toSet();
