@@ -59,10 +59,10 @@ methods:
   - `sortOrder`
 - `ProgressionScheme`
   - `type` supporting at least `doubleProgression`, `linearWeight`,
-    `periodized`
+    `fixedLoad`, `linearPeriodization`
   - `weightIncrementKg`
   - `percentIncrement`
-  - `periodWeeks`
+  - `periodCycles`
   - `deloadPercent`
 - `WorkoutPrescription`
   - `programId`

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fitforge/data/models/training_program.dart';
@@ -12,15 +14,24 @@ void main() {
         type: ProgressionSchemeType.linearWeight,
         weightIncrementKg: 5.0,
         percentIncrement: 10.0,
-        periodWeeks: 6,
+        periodCycles: 6,
         deloadPercent: 0.4,
       );
+      final json = scheme.toJson();
       final restored = ProgressionScheme.fromJson(scheme.toJson());
+      expect(json['periodCycles'], 6);
+      expect(json.containsKey('periodWeeks'), isFalse);
       expect(restored.type, ProgressionSchemeType.linearWeight);
       expect(restored.weightIncrementKg, 5.0);
       expect(restored.percentIncrement, 10.0);
-      expect(restored.periodWeeks, 6);
+      expect(restored.periodCycles, 6);
       expect(restored.deloadPercent, 0.4);
+    });
+
+    test('legacy periodWeeks JSON maps to period cycles', () {
+      final scheme = ProgressionScheme.fromJson({'periodWeeks': 6});
+      expect(scheme.periodCycles, 6);
+      expect(scheme.toJson().containsKey('periodWeeks'), isFalse);
     });
 
     test('default percentIncrement remains 2.5', () {
@@ -59,15 +70,15 @@ void main() {
       final scheme = ProgressionScheme.fromJson({'type': 'linearWeight'});
       expect(scheme.weightIncrementKg, 2.5);
       expect(scheme.percentIncrement, 2.5);
-      expect(scheme.periodWeeks, 4);
+      expect(scheme.periodCycles, 4);
       expect(scheme.deloadPercent, 0.5);
     });
 
     test('copyWith updates selected fields', () {
       final scheme = const ProgressionScheme();
-      final updated = scheme.copyWith(weightIncrementKg: 10.0, periodWeeks: 8);
+      final updated = scheme.copyWith(weightIncrementKg: 10.0, periodCycles: 8);
       expect(updated.weightIncrementKg, 10.0);
-      expect(updated.periodWeeks, 8);
+      expect(updated.periodCycles, 8);
       expect(updated.type, ProgressionSchemeType.doubleProgression);
     });
   });
@@ -1763,6 +1774,66 @@ void main() {
         days: [ProgramDay(id: '${id}_day', name: id)],
       );
     }
+
+    test(
+      'reads nested legacy periodWeeks from stored training programs',
+      () async {
+        final now = DateTime(2025, 6, 1);
+        FlutterSecureStorage.setMockInitialValues({
+          'user1:training_programs': jsonEncode([
+            {
+              'id': 'legacy',
+              'userId': 'user1',
+              'name': 'Legacy Program',
+              'active': false,
+              'currentDayIndex': 0,
+              'advanceMode': 'auto',
+              'createdAt': now.toIso8601String(),
+              'updatedAt': now.toIso8601String(),
+              'days': [
+                {
+                  'id': 'day1',
+                  'name': 'Push',
+                  'kind': 'training',
+                  'exercises': [
+                    {
+                      'id': 'pe1',
+                      'exerciseId': 'ex_bench',
+                      'targetSets': 4,
+                      'minReps': 6,
+                      'maxReps': 10,
+                      'startingWeightKg': 60,
+                      'progressionScheme': {
+                        'type': 'linearWeight',
+                        'weightIncrementKg': 5.0,
+                        'percentIncrement': 10.0,
+                        'periodWeeks': 6,
+                        'deloadPercent': 0.4,
+                      },
+                      'sortOrder': 0,
+                    },
+                  ],
+                },
+              ],
+            },
+          ]),
+        });
+
+        final programs = await AppDatabase.instance.getTrainingPrograms(
+          'user1',
+        );
+        final scheme =
+            programs.single.days.single.exercises.single.progressionScheme;
+
+        expect(scheme.periodCycles, 6);
+        final rewrittenSchemeJson =
+            programs.single
+                    .toJson()['days'][0]['exercises'][0]['progressionScheme']
+                as Map<String, dynamic>;
+        expect(rewrittenSchemeJson['periodCycles'], 6);
+        expect(rewrittenSchemeJson.containsKey('periodWeeks'), isFalse);
+      },
+    );
 
     test(
       'future scheduling preserves current plan and replaces older future',

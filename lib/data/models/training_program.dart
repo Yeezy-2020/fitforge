@@ -69,14 +69,14 @@ class ProgressionScheme {
   final ProgressionSchemeType type;
   final double weightIncrementKg;
   final double percentIncrement;
-  final int periodWeeks;
+  final int periodCycles;
   final double deloadPercent;
 
   const ProgressionScheme({
     this.type = ProgressionSchemeType.doubleProgression,
     this.weightIncrementKg = 2.5,
     this.percentIncrement = 2.5,
-    this.periodWeeks = 4,
+    this.periodCycles = 4,
     this.deloadPercent = 0.5,
   });
 
@@ -86,7 +86,10 @@ class ProgressionScheme {
         weightIncrementKg:
             (json['weightIncrementKg'] as num?)?.toDouble() ?? 2.5,
         percentIncrement: (json['percentIncrement'] as num?)?.toDouble() ?? 2.5,
-        periodWeeks: json['periodWeeks'] as int? ?? 4,
+        periodCycles:
+            (json['periodCycles'] as num?)?.toInt() ??
+            (json['periodWeeks'] as num?)?.toInt() ??
+            4,
         deloadPercent: (json['deloadPercent'] as num?)?.toDouble() ?? 0.5,
       );
 
@@ -94,7 +97,7 @@ class ProgressionScheme {
     'type': type.name,
     'weightIncrementKg': weightIncrementKg,
     'percentIncrement': percentIncrement,
-    'periodWeeks': periodWeeks,
+    'periodCycles': periodCycles,
     'deloadPercent': deloadPercent,
   };
 
@@ -102,13 +105,13 @@ class ProgressionScheme {
     ProgressionSchemeType? type,
     double? weightIncrementKg,
     double? percentIncrement,
-    int? periodWeeks,
+    int? periodCycles,
     double? deloadPercent,
   }) => ProgressionScheme(
     type: type ?? this.type,
     weightIncrementKg: weightIncrementKg ?? this.weightIncrementKg,
     percentIncrement: percentIncrement ?? this.percentIncrement,
-    periodWeeks: periodWeeks ?? this.periodWeeks,
+    periodCycles: periodCycles ?? this.periodCycles,
     deloadPercent: deloadPercent ?? this.deloadPercent,
   );
 }
