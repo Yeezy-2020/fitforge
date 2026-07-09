@@ -129,36 +129,54 @@ class ProgramDetailScreen extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 12),
-              for (var i = 0; i < program.days.length; i++) ...[
-                _ProgramDaySection(
-                  program: program,
-                  day: program.days[i],
-                  dayIndex: i,
-                  exercises: exercises,
-                  isEnglish: isEnglish,
-                  l10n: l10n,
-                  onEditDay: () => _editDay(context, ref, program, i, l10n),
-                  onDeleteDay: () => _deleteDay(context, ref, program, i, l10n),
-                  onAddDeloadAfterDay: () =>
-                      _addDeloadDay(context, ref, program, i, l10n),
-                  onAddExercise: () =>
-                      _addExercise(context, ref, program, i, exercises, l10n),
-                  onEditExercise: (exerciseIndex) => _editProgramExercise(
-                    context,
-                    ref,
-                    program,
-                    i,
-                    exerciseIndex,
-                    exercises,
-                    isEnglish,
-                    l10n,
+              if (program.days.isNotEmpty)
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: program.days.length,
+                  onReorderItem: (oldIndex, newIndex) =>
+                      _reorderDay(ref, program, oldIndex, newIndex),
+                  itemBuilder: (context, i) => Padding(
+                    key: ValueKey(program.days[i].id),
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _ProgramDaySection(
+                      program: program,
+                      day: program.days[i],
+                      dayIndex: i,
+                      dragIndex: i,
+                      exercises: exercises,
+                      isEnglish: isEnglish,
+                      l10n: l10n,
+                      onEditDay: () => _editDay(context, ref, program, i, l10n),
+                      onDeleteDay: () =>
+                          _deleteDay(context, ref, program, i, l10n),
+                      onAddDeloadAfterDay: () =>
+                          _addDeloadDay(context, ref, program, i, l10n),
+                      onAddExercise: () => _addExercise(
+                        context,
+                        ref,
+                        program,
+                        i,
+                        exercises,
+                        l10n,
+                      ),
+                      onEditExercise: (exerciseIndex) => _editProgramExercise(
+                        context,
+                        ref,
+                        program,
+                        i,
+                        exerciseIndex,
+                        exercises,
+                        isEnglish,
+                        l10n,
+                      ),
+                      onRemoveExercise: (exerciseIndex) =>
+                          _removeExercise(ref, program, i, exerciseIndex),
+                    ),
                   ),
-                  onRemoveExercise: (exerciseIndex) =>
-                      _removeExercise(ref, program, i, exerciseIndex),
-                ),
-                const SizedBox(height: 10),
-              ],
-              if (program.days.isEmpty)
+                )
+              else
                 Padding(
                   padding: const EdgeInsets.only(top: 48),
                   child: Center(child: Text(l10n.get('noDaysYet'))),
@@ -515,6 +533,18 @@ class ProgramDetailScreen extends ConsumerWidget {
     await _saveProgram(ref, program.removeDayAt(dayIndex));
   }
 
+  static Future<void> _reorderDay(
+    WidgetRef ref,
+    TrainingProgram program,
+    int oldIndex,
+    int newIndex,
+  ) {
+    return _saveProgram(
+      ref,
+      program.reorderDay(oldIndex, newIndex, reorderedAt: DateTime.now()),
+    );
+  }
+
   static Future<void> _addDeloadDay(
     BuildContext context,
     WidgetRef ref,
@@ -543,6 +573,7 @@ class ProgramDetailScreen extends ConsumerWidget {
             DeloadDayPreset preset,
             double weightPercent,
             double setRatio,
+            double repRatio,
           })
         >(
           context: context,
@@ -565,6 +596,7 @@ class ProgramDetailScreen extends ConsumerWidget {
       preset: result.preset,
       weightPercent: result.weightPercent,
       setRatio: result.setRatio,
+      repRatio: result.repRatio,
     );
     await _saveProgram(
       ref,
@@ -626,10 +658,17 @@ class ProgramDetailScreen extends ConsumerWidget {
         configured.copyWith(sortOrder: day.exercises.length),
       ],
     );
-    await _saveProgram(
-      ref,
-      program.copyWith(days: days, updatedAt: DateTime.now()),
+    var updatedProgram = program.copyWith(
+      days: days,
+      updatedAt: DateTime.now(),
     );
+    if (day.kind == DayKind.training) {
+      updatedProgram = updatedProgram.refreshLinkedDeloadsForDay(
+        day.id,
+        refreshedAt: DateTime.now(),
+      );
+    }
+    await _saveProgram(ref, updatedProgram);
   }
 
   static Future<void> _editProgramExercise(
@@ -657,10 +696,17 @@ class ProgramDetailScreen extends ConsumerWidget {
     final dayExercises = [...day.exercises];
     dayExercises[exerciseIndex] = updated;
     days[dayIndex] = day.copyWith(exercises: dayExercises);
-    await _saveProgram(
-      ref,
-      program.copyWith(days: days, updatedAt: DateTime.now()),
+    var updatedProgram = program.copyWith(
+      days: days,
+      updatedAt: DateTime.now(),
     );
+    if (day.kind == DayKind.training) {
+      updatedProgram = updatedProgram.refreshLinkedDeloadsForDay(
+        day.id,
+        refreshedAt: DateTime.now(),
+      );
+    }
+    await _saveProgram(ref, updatedProgram);
   }
 
   static Future<void> _removeExercise(
@@ -678,10 +724,17 @@ class ProgramDetailScreen extends ConsumerWidget {
           exercises[i].copyWith(sortOrder: i),
       ],
     );
-    await _saveProgram(
-      ref,
-      program.copyWith(days: days, updatedAt: DateTime.now()),
+    var updatedProgram = program.copyWith(
+      days: days,
+      updatedAt: DateTime.now(),
     );
+    if (day.kind == DayKind.training) {
+      updatedProgram = updatedProgram.refreshLinkedDeloadsForDay(
+        day.id,
+        refreshedAt: DateTime.now(),
+      );
+    }
+    await _saveProgram(ref, updatedProgram);
   }
 
   static Future<void> _saveProgram(WidgetRef ref, TrainingProgram program) {
@@ -711,6 +764,7 @@ class _DeloadDayDialog extends StatefulWidget {
 class _DeloadDayDialogState extends State<_DeloadDayDialog> {
   final _weightPercentCtrl = TextEditingController(text: '70');
   final _setRatioCtrl = TextEditingController(text: '100');
+  final _repRatioCtrl = TextEditingController(text: '100');
   late _DeloadInsertPosition _position;
   late ProgramDay _baseDay;
   DeloadDayPreset _preset = DeloadDayPreset.standard;
@@ -729,6 +783,7 @@ class _DeloadDayDialogState extends State<_DeloadDayDialog> {
   void dispose() {
     _weightPercentCtrl.dispose();
     _setRatioCtrl.dispose();
+    _repRatioCtrl.dispose();
     super.dispose();
   }
 
@@ -885,30 +940,28 @@ class _DeloadDayDialogState extends State<_DeloadDayDialog> {
   }
 
   Widget _customFields() {
-    return Row(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
       children: [
-        Expanded(
-          child: TextField(
-            controller: _weightPercentCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: widget.l10n.get('loadPercent'),
-              suffixText: '%',
-            ),
-          ),
+        SizedBox(
+          width: 132,
+          child: _ratioField(_weightPercentCtrl, 'loadPercent'),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextField(
-            controller: _setRatioCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: widget.l10n.get('setRatio'),
-              suffixText: '%',
-            ),
-          ),
-        ),
+        SizedBox(width: 132, child: _ratioField(_setRatioCtrl, 'setRatio')),
+        SizedBox(width: 132, child: _ratioField(_repRatioCtrl, 'repRatio')),
       ],
+    );
+  }
+
+  Widget _ratioField(TextEditingController controller, String labelKey) {
+    return TextField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: widget.l10n.get(labelKey),
+        suffixText: '%',
+      ),
     );
   }
 
@@ -929,16 +982,24 @@ class _DeloadDayDialogState extends State<_DeloadDayDialog> {
     };
     final setRatio = switch (_preset) {
       DeloadDayPreset.standard => 1.0,
-      DeloadDayPreset.volume => 0.5,
+      DeloadDayPreset.volume => 1.0,
       DeloadDayPreset.custom =>
         (double.tryParse(_setRatioCtrl.text) ?? 0) / 100,
+    };
+    final repRatio = switch (_preset) {
+      DeloadDayPreset.standard => 1.0,
+      DeloadDayPreset.volume => 0.5,
+      DeloadDayPreset.custom =>
+        (double.tryParse(_repRatioCtrl.text) ?? 0) / 100,
     };
 
     if (weightPercent == null ||
         weightPercent <= 0 ||
         weightPercent > 100 ||
         setRatio <= 0 ||
-        setRatio > 1) {
+        setRatio > 1 ||
+        repRatio <= 0 ||
+        repRatio > 1) {
       setState(() => _error = widget.l10n.get('invalidConfig'));
       return;
     }
@@ -949,6 +1010,7 @@ class _DeloadDayDialogState extends State<_DeloadDayDialog> {
       preset: _preset,
       weightPercent: weightPercent,
       setRatio: setRatio,
+      repRatio: repRatio,
     ));
   }
 }
@@ -978,12 +1040,17 @@ class _ProgramHeader extends StatelessWidget {
         .length;
     final restDays = program.days.length - trainingDays;
     final isPaused = program.isPausedNow();
+    final isScheduled = _isProgramScheduled(program);
     final openPause = program.pausePeriods
         .where((period) => period.endDate == null)
         .lastOrNull;
     final status = isPaused
         ? l10n.format('pausedSince', {
             'date': l10n.shortDate(openPause?.startDate ?? DateTime.now()),
+          })
+        : isScheduled
+        ? l10n.format('scheduledStartDate', {
+            'date': l10n.shortDate(program.activatedAt!),
           })
         : program.active
         ? l10n.get('active')
@@ -1010,6 +1077,8 @@ class _ProgramHeader extends StatelessWidget {
                 Icon(
                   isPaused
                       ? Icons.pause_circle_outline
+                      : isScheduled
+                      ? Icons.event_available
                       : program.active
                       ? Icons.check_circle
                       : Icons.assignment_outlined,
@@ -1036,15 +1105,17 @@ class _ProgramHeader extends StatelessWidget {
               }),
               style: theme.textTheme.bodyMedium,
             ),
-            const SizedBox(height: 2),
-            Text(
-              l10n.format('currentDayN', {
-                'n': (program.normalizedCurrentDayIndex + 1).toString(),
-              }),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+            if (!isScheduled) ...[
+              const SizedBox(height: 2),
+              Text(
+                l10n.format('currentDayN', {
+                  'n': (program.normalizedCurrentDayIndex + 1).toString(),
+                }),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 2),
             Text(
               durationText,
@@ -1064,18 +1135,28 @@ class _ProgramHeader extends StatelessWidget {
                     label: Text(l10n.get('activateProgram')),
                   ),
                 if (program.active)
-                  isPaused
-                      ? FilledButton.icon(
-                          onPressed: onResume,
-                          icon: const Icon(Icons.play_arrow, size: 18),
-                          label: Text(l10n.get('resumeProgram')),
-                        )
-                      : OutlinedButton.icon(
-                          onPressed: onPause,
-                          icon: const Icon(Icons.pause, size: 18),
-                          label: Text(l10n.get('pauseProgram')),
-                        ),
-                if (program.active)
+                  if (isScheduled)
+                    OutlinedButton.icon(
+                      onPressed: onEnd,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: theme.colorScheme.error,
+                      ),
+                      icon: const Icon(Icons.event_busy, size: 18),
+                      label: Text(l10n.get('endProgram')),
+                    )
+                  else if (isPaused)
+                    FilledButton.icon(
+                      onPressed: onResume,
+                      icon: const Icon(Icons.play_arrow, size: 18),
+                      label: Text(l10n.get('resumeProgram')),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: onPause,
+                      icon: const Icon(Icons.pause, size: 18),
+                      label: Text(l10n.get('pauseProgram')),
+                    ),
+                if (program.active && !isScheduled)
                   OutlinedButton.icon(
                     onPressed: onEnd,
                     style: OutlinedButton.styleFrom(
@@ -1097,6 +1178,7 @@ class _ProgramDaySection extends StatelessWidget {
   final TrainingProgram program;
   final ProgramDay day;
   final int dayIndex;
+  final int dragIndex;
   final List<Exercise> exercises;
   final bool isEnglish;
   final L10n l10n;
@@ -1111,6 +1193,7 @@ class _ProgramDaySection extends StatelessWidget {
     required this.program,
     required this.day,
     required this.dayIndex,
+    required this.dragIndex,
     required this.exercises,
     required this.isEnglish,
     required this.l10n,
@@ -1139,26 +1222,40 @@ class _ProgramDaySection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  isRest
-                      ? Icons.hotel
-                      : isDeload
-                      ? Icons.speed_outlined
-                      : Icons.fitness_center,
-                  size: 20,
-                  color: isDeload
-                      ? theme.colorScheme.secondary
-                      : theme.colorScheme.primary,
+                ReorderableDelayedDragStartListener(
+                  index: dragIndex,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isRest
+                            ? Icons.hotel
+                            : isDeload
+                            ? Icons.speed_outlined
+                            : Icons.fitness_center,
+                        size: 20,
+                        color: isDeload
+                            ? theme.colorScheme.secondary
+                            : theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    l10n.format('daySectionN', {
-                      'n': (dayIndex + 1).toString(),
-                      'name': day.name,
-                    }),
-                    style: theme.textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
+                  child: ReorderableDelayedDragStartListener(
+                    index: dragIndex,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        l10n.format('daySectionN', {
+                          'n': (dayIndex + 1).toString(),
+                          'name': day.name,
+                        }),
+                        style: theme.textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1179,31 +1276,50 @@ class _ProgramDaySection extends StatelessWidget {
               ],
             ),
             if (isRest)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(l10n.get('restDay')),
+              ReorderableDelayedDragStartListener(
+                index: dragIndex,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(l10n.get('restDay')),
+                  ),
+                ),
               )
             else ...[
               const SizedBox(height: 8),
               if (isDeload) ...[
-                Text(
-                  l10n.get('deloadDaySubtitle'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.secondary,
+                ReorderableDelayedDragStartListener(
+                  index: dragIndex,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      l10n.get('deloadDaySubtitle'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
               ],
               if (sortedExercises.isEmpty)
-                Text(
-                  l10n.get('noExercisesInDay'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                ReorderableDelayedDragStartListener(
+                  index: dragIndex,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      l10n.get('noExercisesInDay'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
                   ),
                 )
               else
                 for (var i = 0; i < sortedExercises.length; i++)
                   _ProgramExerciseTile(
+                    dragIndex: dragIndex,
                     exercise: sortedExercises[i],
                     name: _exerciseName(
                       sortedExercises[i].exerciseId,
@@ -1243,6 +1359,15 @@ List<ProgramDay> _regularTrainingDays(TrainingProgram program) {
   return program.days.where((day) => day.kind == DayKind.training).toList();
 }
 
+bool _isProgramScheduled(TrainingProgram program) {
+  final activatedAt = program.activatedAt;
+  if (!program.active || activatedAt == null) return false;
+  return _dateOnly(activatedAt).isAfter(_dateOnly(DateTime.now()));
+}
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
 ProgramDay? _defaultDeloadBaseDay(TrainingProgram program, int insertIndex) {
   final end = insertIndex.clamp(0, program.days.length).toInt();
   for (var i = end - 1; i >= 0; i--) {
@@ -1253,6 +1378,7 @@ ProgramDay? _defaultDeloadBaseDay(TrainingProgram program, int insertIndex) {
 }
 
 class _ProgramExerciseTile extends StatelessWidget {
+  final int dragIndex;
   final ProgramExercise exercise;
   final String name;
   final L10n l10n;
@@ -1260,6 +1386,7 @@ class _ProgramExerciseTile extends StatelessWidget {
   final VoidCallback onRemove;
 
   const _ProgramExerciseTile({
+    required this.dragIndex,
     required this.exercise,
     required this.name,
     required this.l10n,
@@ -1273,8 +1400,17 @@ class _ProgramExerciseTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      title: Text(name, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subtitle),
+      title: ReorderableDelayedDragStartListener(
+        index: dragIndex,
+        child: SizedBox(
+          width: double.infinity,
+          child: Text(name, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+      subtitle: ReorderableDelayedDragStartListener(
+        index: dragIndex,
+        child: SizedBox(width: double.infinity, child: Text(subtitle)),
+      ),
       trailing: PopupMenuButton<String>(
         onSelected: (value) {
           if (value == 'edit') onEdit();

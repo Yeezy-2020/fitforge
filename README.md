@@ -1,13 +1,17 @@
 # FitForge 🏋️
 
-**健身饮食记录与营养素配比 App** — 跨平台 Flutter 应用，支持训练日志、饮食追踪、碳循环/碳水减降/增肌营养方案、体测记录、中英双语切换。
+**健身饮食记录与营养素配比 App** — 仅支持移动端的 Flutter 应用，支持训练日志、饮食追踪、碳循环/碳水减降/增肌营养方案、体测记录、中英双语切换。
 
 > Log every rep. Own every meal.
 
 [![Deploy](https://github.com/Yeezy-2020/fitforge/actions/workflows/deploy.yml/badge.svg)](https://github.com/Yeezy-2020/fitforge/actions/workflows/deploy.yml)
 [![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)]()
 
-## 线上地址
+## 平台定位
+
+FitForge 仅支持移动端（iOS / Android），不支持 Web 或桌面端。现有 Web 构建和 GitHub Pages 仅用于内部预览、部署核查和开发阶段验证。
+
+## Web 预览地址
 
 [**https://yeezy-2020.github.io/fitforge**](https://yeezy-2020.github.io/fitforge)
 
@@ -105,7 +109,8 @@ lib/
 ### 前置条件
 
 - Flutter SDK ≥ 3.12
-- Chrome（Web 开发）
+- Android Studio / Android SDK（Android 开发）
+- Xcode（iOS 开发，仅 macOS）
 
 ### 启动
 
@@ -113,7 +118,8 @@ lib/
 git clone https://github.com/Yeezy-2020/fitforge.git
 cd fitforge
 flutter pub get
-flutter run -d chrome
+flutter devices
+flutter run -d <device-id>
 ```
 
 ### 运行测试
@@ -166,10 +172,10 @@ flutter test test/features/training_program_test.dart
 
 ## 部署
 
-`main` 分支推送后 GitHub Actions 自动构建并部署到 GitHub Pages：
+`main` 分支推送后 GitHub Actions 自动构建并部署 Web 预览到 GitHub Pages。该构建仅用于内部预览和部署核查，不代表 Web 为正式支持平台：
 
 ```
-.flutter build web --release --base-href /fitforge/
+flutter build web --release --base-href /fitforge/
 ```
 
 ## 测试账号

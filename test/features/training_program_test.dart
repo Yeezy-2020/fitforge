@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fitforge/data/models/training_program.dart';
 import 'package:fitforge/data/models/workout_log.dart';
+import 'package:fitforge/data/repositories/app_database.dart';
 import 'package:fitforge/core/utils/program_prescription_calculator.dart';
 
 void main() {
@@ -19,6 +21,11 @@ void main() {
       expect(restored.percentIncrement, 10.0);
       expect(restored.periodWeeks, 6);
       expect(restored.deloadPercent, 0.4);
+    });
+
+    test('default percentIncrement remains 2.5', () {
+      expect(const ProgressionScheme().percentIncrement, 2.5);
+      expect(ProgressionScheme.fromJson({}).percentIncrement, 2.5);
     });
 
     test('missing type string falls back to doubleProgression', () {
@@ -232,7 +239,7 @@ void main() {
     );
 
     test(
-      'volume halves sets and reps with floor and clamp, leaving weight',
+      'volume keeps sets and weight unchanged and halves reps with floor and clamp',
       () {
         final deload = createDeloadDayFrom(
           baseDay: baseDay(),
@@ -245,7 +252,7 @@ void main() {
         );
 
         expect(deload.exercises.first.startingWeightKg, 82.35);
-        expect(deload.exercises.first.targetSets, 2);
+        expect(deload.exercises.first.targetSets, 5);
         expect(deload.exercises.first.minReps, 2);
         expect(deload.exercises.first.maxReps, 4);
         expect(deload.exercises.last.targetSets, 1);
@@ -255,7 +262,7 @@ void main() {
     );
 
     test(
-      'custom applies weight percent and set ratio while preserving reps',
+      'custom applies weight percent, set ratio, and rep ratio independently',
       () {
         final deload = createDeloadDayFrom(
           baseDay: baseDay(),
@@ -265,16 +272,42 @@ void main() {
           preset: DeloadDayPreset.custom,
           weightPercent: 55,
           setRatio: 0.6,
+          repRatio: 0.5,
         );
 
         final exercise = deload.exercises.first;
         expect(exercise.startingWeightKg, 45.3);
         expect(exercise.targetSets, 3);
-        expect(exercise.minReps, 5);
-        expect(exercise.maxReps, 9);
+        expect(exercise.minReps, 2);
+        expect(exercise.maxReps, 4);
         expect(deload.exercises.last.targetSets, 1);
+        expect(deload.exercises.last.minReps, 1);
+        expect(deload.exercises.last.maxReps, 1);
       },
     );
+
+    test('deload JSON and source metadata roundtrip', () {
+      final deload = createDeloadDayFrom(
+        baseDay: baseDay(),
+        id: 'pd_deload',
+        name: 'Custom Deload',
+        exerciseIdBuilder: (index, source) => 'custom_${source.id}_$index',
+        preset: DeloadDayPreset.custom,
+        weightPercent: 60,
+        setRatio: 0.75,
+        repRatio: 0.5,
+      );
+
+      final restored = ProgramDay.fromJson(deload.toJson());
+
+      expect(restored.deloadSourceDayId, 'pd_base');
+      expect(restored.deloadPreset, DeloadDayPreset.custom);
+      expect(restored.deloadWeightPercent, 60);
+      expect(restored.deloadSetRatio, 0.75);
+      expect(restored.deloadRepRatio, 0.5);
+      expect(restored.exercises.first.id, 'custom_pe_bench_0');
+      expect(restored.exercises.first.deloadSourceExerciseId, 'pe_bench');
+    });
 
     test('empty base day creates empty deload day', () {
       final deload = createDeloadDayFrom(
@@ -1283,6 +1316,304 @@ void main() {
     });
 
     test(
+      'refreshLinkedDeloadsForDay updates weights and preserves deload exercise ids',
+      () {
+        final sourceDay = ProgramDay(
+          id: 'd1',
+          name: 'Push',
+          kind: DayKind.training,
+          exercises: [
+            ProgramExercise(
+              id: 'pe_bench',
+              exerciseId: 'ex_bench',
+              targetSets: 3,
+              minReps: 8,
+              maxReps: 12,
+              startingWeightKg: 100,
+            ),
+          ],
+        );
+        final deload = createDeloadDayFrom(
+          baseDay: sourceDay,
+          id: 'd1_deload',
+          name: 'Deload Push',
+          exerciseIdBuilder: (index, source) => 'deload_${source.id}_$index',
+        );
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            sourceDay.copyWith(
+              exercises: [
+                sourceDay.exercises.first.copyWith(startingWeightKg: 120),
+              ],
+            ),
+            deload,
+          ],
+        );
+
+        final refreshed = program.refreshLinkedDeloadsForDay(
+          'd1',
+          refreshedAt: DateTime(2025, 6, 2),
+        );
+
+        final refreshedDeload = refreshed.days[1];
+        expect(refreshedDeload.exercises.single.id, 'deload_pe_bench_0');
+        expect(
+          refreshedDeload.exercises.single.deloadSourceExerciseId,
+          'pe_bench',
+        );
+        expect(refreshedDeload.exercises.single.startingWeightKg, 84);
+        expect(refreshed.updatedAt, DateTime(2025, 6, 2));
+      },
+    );
+
+    test(
+      'refreshLinkedDeloadsForDay infers and upgrades obvious legacy deloads',
+      () {
+        final sourceDay = ProgramDay(
+          id: 'd1',
+          name: 'Push',
+          kind: DayKind.training,
+          exercises: [
+            ProgramExercise(
+              id: 'pe_bench',
+              exerciseId: 'ex_bench',
+              targetSets: 4,
+              minReps: 6,
+              maxReps: 10,
+              startingWeightKg: 120,
+            ),
+            ProgramExercise(
+              id: 'pe_press',
+              exerciseId: 'ex_press',
+              targetSets: 3,
+              minReps: 8,
+              maxReps: 12,
+              startingWeightKg: 60,
+            ),
+          ],
+        );
+        final legacyDeload = ProgramDay(
+          id: 'd1_deload',
+          name: 'Deload Push',
+          kind: DayKind.deload,
+          exercises: [
+            ProgramExercise(
+              id: 'legacy_bench',
+              exerciseId: 'ex_bench',
+              startingWeightKg: 70,
+            ),
+            ProgramExercise(
+              id: 'legacy_press',
+              exerciseId: 'ex_press',
+              startingWeightKg: 35,
+            ),
+          ],
+        );
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            sourceDay,
+            ProgramDay(
+              id: 'd2',
+              name: 'Pull',
+              kind: DayKind.training,
+              exercises: [ProgramExercise(id: 'pe_row', exerciseId: 'ex_row')],
+            ),
+            legacyDeload,
+          ],
+        );
+
+        final refreshed = program.refreshLinkedDeloadsForDay(
+          'd1',
+          refreshedAt: DateTime(2025, 6, 2),
+        );
+
+        final refreshedDeload = refreshed.days[2];
+        expect(refreshedDeload.deloadSourceDayId, 'd1');
+        expect(refreshedDeload.exercises[0].id, 'legacy_bench');
+        expect(refreshedDeload.exercises[0].deloadSourceExerciseId, 'pe_bench');
+        expect(refreshedDeload.exercises[0].startingWeightKg, 84);
+        expect(refreshedDeload.exercises[1].id, 'legacy_press');
+        expect(refreshedDeload.exercises[1].deloadSourceExerciseId, 'pe_press');
+        expect(refreshedDeload.exercises[1].startingWeightKg, 42);
+        expect(refreshed.updatedAt, DateTime(2025, 6, 2));
+      },
+    );
+
+    test(
+      'refreshLinkedDeloadsForDay leaves ambiguous legacy deloads unchanged',
+      () {
+        final sourceDay = ProgramDay(
+          id: 'd1',
+          name: 'Upper A',
+          kind: DayKind.training,
+          exercises: [
+            ProgramExercise(
+              id: 'pe_a_bench',
+              exerciseId: 'ex_bench',
+              startingWeightKg: 120,
+            ),
+            ProgramExercise(id: 'pe_a_row', exerciseId: 'ex_row'),
+          ],
+        );
+        final duplicateSourceDay = ProgramDay(
+          id: 'd2',
+          name: 'Upper B',
+          kind: DayKind.training,
+          exercises: [
+            ProgramExercise(
+              id: 'pe_b_bench',
+              exerciseId: 'ex_bench',
+              startingWeightKg: 100,
+            ),
+            ProgramExercise(id: 'pe_b_row', exerciseId: 'ex_row'),
+          ],
+        );
+        final legacyDeload = ProgramDay(
+          id: 'upper_deload',
+          name: 'Deload',
+          kind: DayKind.deload,
+          exercises: [
+            ProgramExercise(
+              id: 'legacy_bench',
+              exerciseId: 'ex_bench',
+              startingWeightKg: 70,
+            ),
+            ProgramExercise(id: 'legacy_row', exerciseId: 'ex_row'),
+          ],
+        );
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'Upper',
+          createdAt: now,
+          updatedAt: now,
+          days: [sourceDay, duplicateSourceDay, legacyDeload],
+        );
+
+        final refreshed = program.refreshLinkedDeloadsForDay(
+          'd1',
+          refreshedAt: DateTime(2025, 6, 2),
+        );
+
+        expect(identical(refreshed, program), isTrue);
+        expect(refreshed.days[2].deloadSourceDayId, isNull);
+        expect(refreshed.days[2].exercises[0].deloadSourceExerciseId, isNull);
+        expect(refreshed.days[2].exercises[0].startingWeightKg, 70);
+        expect(refreshed.updatedAt, now);
+      },
+    );
+
+    test(
+      'refreshLinkedDeloadsForDay leaves single-exercise legacy deloads without name match unchanged',
+      () {
+        final sourceDay = ProgramDay(
+          id: 'd1',
+          name: 'Push',
+          kind: DayKind.training,
+          exercises: [
+            ProgramExercise(
+              id: 'pe_bench',
+              exerciseId: 'ex_bench',
+              startingWeightKg: 120,
+            ),
+            ProgramExercise(id: 'pe_press', exerciseId: 'ex_press'),
+          ],
+        );
+        final legacyDeload = ProgramDay(
+          id: 'legacy_single',
+          name: 'Easy day',
+          kind: DayKind.deload,
+          exercises: [
+            ProgramExercise(
+              id: 'legacy_bench',
+              exerciseId: 'ex_bench',
+              startingWeightKg: 70,
+            ),
+          ],
+        );
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          createdAt: now,
+          updatedAt: now,
+          days: [sourceDay, legacyDeload],
+        );
+
+        final refreshed = program.refreshLinkedDeloadsForDay(
+          'd1',
+          refreshedAt: DateTime(2025, 6, 2),
+        );
+
+        expect(identical(refreshed, program), isTrue);
+        expect(refreshed.days[1].deloadSourceDayId, isNull);
+        expect(
+          refreshed.days[1].exercises.single.deloadSourceExerciseId,
+          isNull,
+        );
+        expect(refreshed.days[1].exercises.single.startingWeightKg, 70);
+      },
+    );
+
+    test(
+      'reorderDay updates order and keeps current and activated day ids stable',
+      () {
+        final program = TrainingProgram(
+          id: 'prog1',
+          userId: 'user1',
+          name: 'PPL',
+          currentDayIndex: 2,
+          activatedAt: now,
+          activatedDayIndex: 3,
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            ProgramDay(id: 'd1', name: 'Push', kind: DayKind.training),
+            ProgramDay(id: 'd2', name: 'Pull', kind: DayKind.training),
+            ProgramDay(id: 'd3', name: 'Legs', kind: DayKind.training),
+            ProgramDay(id: 'd4', name: 'Rest', kind: DayKind.rest),
+          ],
+        );
+
+        final reordered = program.reorderDay(
+          3,
+          0,
+          reorderedAt: DateTime(2025, 6, 2),
+        );
+
+        expect(reordered.days.map((day) => day.id), ['d4', 'd1', 'd2', 'd3']);
+        expect(reordered.currentDayIndex, 3);
+        expect(reordered.currentDay?.id, 'd3');
+        expect(reordered.activatedDayIndex, 0);
+        expect(reordered.days[reordered.activatedDayIndex].id, 'd4');
+        expect(reordered.updatedAt, DateTime(2025, 6, 2));
+        expect(identical(program.reorderDay(-1, 0), program), isTrue);
+        expect(identical(program.reorderDay(1, 1), program), isTrue);
+
+        final movedDown = program.reorderDay(
+          1,
+          2,
+          reorderedAt: DateTime(2025, 6, 3),
+        );
+
+        expect(movedDown.days.map((day) => day.id), ['d1', 'd3', 'd2', 'd4']);
+        expect(movedDown.currentDay?.id, 'd3');
+        expect(movedDown.days[movedDown.activatedDayIndex].id, 'd4');
+        expect(movedDown.updatedAt, DateTime(2025, 6, 3));
+      },
+    );
+
+    test(
       'activeTrainingProgramForUser filters stale active programs by user',
       () {
         final user1Program = TrainingProgram(
@@ -1313,6 +1644,196 @@ void main() {
           ], 'user1')?.id,
           'prog1',
         );
+      },
+    );
+
+    test(
+      'activeTrainingProgramForUser selects started plan before scheduled start',
+      () {
+        final current = TrainingProgram(
+          id: 'current',
+          userId: 'user1',
+          name: 'Current',
+          active: true,
+          activatedAt: DateTime(2025, 6, 1),
+          createdAt: now,
+          updatedAt: now,
+          days: [
+            ProgramDay(id: 'current_push', name: 'Current Push'),
+            ProgramDay(id: 'current_pull', name: 'Current Pull'),
+          ],
+        );
+        final scheduled = TrainingProgram(
+          id: 'scheduled',
+          userId: 'user1',
+          name: 'Scheduled',
+          active: true,
+          activatedAt: DateTime(2025, 6, 8),
+          createdAt: now,
+          updatedAt: now.add(const Duration(minutes: 1)),
+          days: [
+            ProgramDay(id: 'scheduled_push', name: 'Scheduled Push'),
+            ProgramDay(id: 'scheduled_pull', name: 'Scheduled Pull'),
+          ],
+        );
+
+        final programs = [current, scheduled];
+
+        expect(
+          activeTrainingProgramForUser(
+            programs,
+            'user1',
+            date: DateTime(2025, 6, 7),
+          )?.id,
+          'current',
+        );
+        expect(
+          activeTrainingProgramForUser(
+            programs,
+            'user1',
+            date: DateTime(2025, 6, 8),
+          )?.id,
+          'scheduled',
+        );
+        expect(
+          activeTrainingProgramForUser(
+            programs,
+            'user1',
+            date: DateTime(2025, 6, 9),
+          )?.programDayForDate(DateTime(2025, 6, 9))?.id,
+          'scheduled_pull',
+        );
+      },
+    );
+
+    test(
+      'activeTrainingProgramForUser returns null before only future start',
+      () {
+        final scheduled = TrainingProgram(
+          id: 'scheduled',
+          userId: 'user1',
+          name: 'Scheduled',
+          active: true,
+          activatedAt: DateTime(2025, 6, 8),
+          createdAt: now,
+          updatedAt: now,
+          days: [ProgramDay(id: 'scheduled_push', name: 'Scheduled Push')],
+        );
+
+        expect(
+          activeTrainingProgramForUser(
+            [scheduled],
+            'user1',
+            date: DateTime(2025, 6, 7),
+          ),
+          isNull,
+        );
+        expect(
+          activeTrainingProgramForUser(
+            [scheduled],
+            'user1',
+            date: DateTime(2025, 6, 8),
+          )?.id,
+          'scheduled',
+        );
+      },
+    );
+  });
+
+  group('AppDatabase training program scheduling', () {
+    setUp(() {
+      FlutterSecureStorage.setMockInitialValues({});
+    });
+
+    TrainingProgram program({
+      required String id,
+      required bool active,
+      required DateTime? activatedAt,
+      DateTime? updatedAt,
+    }) {
+      final createdAt = DateTime.now().subtract(const Duration(days: 30));
+      return TrainingProgram(
+        id: id,
+        userId: 'user1',
+        name: id,
+        active: active,
+        activatedAt: activatedAt,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? createdAt,
+        days: [ProgramDay(id: '${id}_day', name: id)],
+      );
+    }
+
+    test(
+      'future scheduling preserves current plan and replaces older future',
+      () async {
+        final database = AppDatabase.instance;
+        final today = DateTime.now();
+        final currentStart = today.subtract(const Duration(days: 7));
+        final oldFutureStart = today.add(const Duration(days: 7));
+        final newFutureStart = today.add(const Duration(days: 14));
+
+        await database.saveTrainingPrograms('user1', [
+          program(id: 'current', active: true, activatedAt: currentStart),
+          program(
+            id: 'old_future',
+            active: true,
+            activatedAt: oldFutureStart,
+            updatedAt: today.subtract(const Duration(minutes: 5)),
+          ),
+          program(id: 'new_future', active: false, activatedAt: null),
+        ]);
+
+        await database.setActiveTrainingProgram(
+          'user1',
+          'new_future',
+          activatedAt: newFutureStart,
+          plannedCycleCount: 2,
+        );
+
+        final byId = {
+          for (final item in await database.getTrainingPrograms('user1'))
+            item.id: item,
+        };
+        expect(byId['current']?.active, true);
+        expect(byId['old_future']?.active, false);
+        expect(byId['new_future']?.active, true);
+        expect(byId['new_future']?.activatedAt, newFutureStart);
+        expect(byId['new_future']?.plannedCycleCount, 2);
+      },
+    );
+
+    test(
+      'immediate activation deactivates current and future programs',
+      () async {
+        final database = AppDatabase.instance;
+        final today = DateTime.now();
+        final currentStart = today.subtract(const Duration(days: 7));
+        final futureStart = today.add(const Duration(days: 7));
+        final immediateStart = today.subtract(const Duration(days: 1));
+
+        await database.saveTrainingPrograms('user1', [
+          program(id: 'current', active: true, activatedAt: currentStart),
+          program(id: 'future', active: true, activatedAt: futureStart),
+          program(id: 'replacement', active: false, activatedAt: null),
+        ]);
+
+        await database.setActiveTrainingProgram(
+          'user1',
+          'replacement',
+          activatedAt: immediateStart,
+          plannedCycleCount: null,
+        );
+
+        final byId = {
+          for (final item in await database.getTrainingPrograms('user1'))
+            item.id: item,
+        };
+        expect(byId['current']?.active, false);
+        expect(byId['future']?.active, false);
+        expect(byId['replacement']?.active, true);
+        expect(byId['replacement']?.activatedAt, immediateStart);
+        expect(byId['replacement']?.plannedCycleCount, isNull);
       },
     );
   });

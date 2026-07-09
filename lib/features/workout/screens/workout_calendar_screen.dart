@@ -132,7 +132,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
     final cycleTemplate = ref.watch(nutritionCycleProvider);
     final cycleStartDate = ref.watch(nutritionStartDateProvider);
     final dietCache = ref.watch(dietCacheProvider);
-    final activeProgram = ref.watch(activeTrainingProgramProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    final programs = ref.watch(trainingProgramsProvider).valueOrNull ?? [];
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final logCache = ref.watch(workoutLogCacheProvider);
     final dk = _selectedDay != null
@@ -316,6 +317,11 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                           );
                           final hasDiet = (dietCache[dateKey] ?? []).isNotEmpty;
                           final hasCycle = cycleTemplate != null;
+                          final activeProgram = activeTrainingProgramForUser(
+                            programs,
+                            userId,
+                            date: d,
+                          );
                           final programDay = activeProgram?.programDayForDate(
                             d,
                           );

@@ -52,6 +52,19 @@ AdvanceMode _advanceModeFromString(String? value) {
   }
 }
 
+DeloadDayPreset? _deloadDayPresetFromString(String? value) {
+  switch (value) {
+    case 'standard':
+      return DeloadDayPreset.standard;
+    case 'volume':
+      return DeloadDayPreset.volume;
+    case 'custom':
+      return DeloadDayPreset.custom;
+    default:
+      return null;
+  }
+}
+
 class ProgressionScheme {
   final ProgressionSchemeType type;
   final double weightIncrementKg;
@@ -103,6 +116,7 @@ class ProgressionScheme {
 class ProgramExercise {
   final String id;
   final String exerciseId;
+  final String? deloadSourceExerciseId;
   final int targetSets;
   final int minReps;
   final int maxReps;
@@ -113,6 +127,7 @@ class ProgramExercise {
   const ProgramExercise({
     required this.id,
     required this.exerciseId,
+    this.deloadSourceExerciseId,
     this.targetSets = 3,
     this.minReps = 8,
     this.maxReps = 12,
@@ -125,6 +140,7 @@ class ProgramExercise {
       ProgramExercise(
         id: json['id'] as String,
         exerciseId: json['exerciseId'] as String,
+        deloadSourceExerciseId: json['deloadSourceExerciseId'] as String?,
         targetSets: json['targetSets'] as int? ?? 3,
         minReps: json['minReps'] as int? ?? 8,
         maxReps: json['maxReps'] as int? ?? 12,
@@ -140,6 +156,7 @@ class ProgramExercise {
   Map<String, dynamic> toJson() => {
     'id': id,
     'exerciseId': exerciseId,
+    'deloadSourceExerciseId': deloadSourceExerciseId,
     'targetSets': targetSets,
     'minReps': minReps,
     'maxReps': maxReps,
@@ -151,6 +168,7 @@ class ProgramExercise {
   ProgramExercise copyWith({
     String? id,
     String? exerciseId,
+    String? deloadSourceExerciseId,
     int? targetSets,
     int? minReps,
     int? maxReps,
@@ -160,6 +178,8 @@ class ProgramExercise {
   }) => ProgramExercise(
     id: id ?? this.id,
     exerciseId: exerciseId ?? this.exerciseId,
+    deloadSourceExerciseId:
+        deloadSourceExerciseId ?? this.deloadSourceExerciseId,
     targetSets: targetSets ?? this.targetSets,
     minReps: minReps ?? this.minReps,
     maxReps: maxReps ?? this.maxReps,
@@ -173,12 +193,22 @@ class ProgramDay {
   final String id;
   final String name;
   final DayKind kind;
+  final String? deloadSourceDayId;
+  final DeloadDayPreset? deloadPreset;
+  final double? deloadWeightPercent;
+  final double? deloadSetRatio;
+  final double? deloadRepRatio;
   final List<ProgramExercise> exercises;
 
   const ProgramDay({
     required this.id,
     required this.name,
     this.kind = DayKind.training,
+    this.deloadSourceDayId,
+    this.deloadPreset,
+    this.deloadWeightPercent,
+    this.deloadSetRatio,
+    this.deloadRepRatio,
     this.exercises = const [],
   });
 
@@ -186,6 +216,11 @@ class ProgramDay {
     id: json['id'] as String,
     name: json['name'] as String? ?? '',
     kind: _dayKindFromString(json['kind'] as String?),
+    deloadSourceDayId: json['deloadSourceDayId'] as String?,
+    deloadPreset: _deloadDayPresetFromString(json['deloadPreset'] as String?),
+    deloadWeightPercent: (json['deloadWeightPercent'] as num?)?.toDouble(),
+    deloadSetRatio: (json['deloadSetRatio'] as num?)?.toDouble(),
+    deloadRepRatio: (json['deloadRepRatio'] as num?)?.toDouble(),
     exercises: json['exercises'] != null
         ? (json['exercises'] as List)
               .map((e) => ProgramExercise.fromJson(e as Map<String, dynamic>))
@@ -197,6 +232,11 @@ class ProgramDay {
     'id': id,
     'name': name,
     'kind': kind.name,
+    'deloadSourceDayId': deloadSourceDayId,
+    'deloadPreset': deloadPreset?.name,
+    'deloadWeightPercent': deloadWeightPercent,
+    'deloadSetRatio': deloadSetRatio,
+    'deloadRepRatio': deloadRepRatio,
     'exercises': exercises.map((e) => e.toJson()).toList(),
   };
 
@@ -206,11 +246,21 @@ class ProgramDay {
     String? id,
     String? name,
     DayKind? kind,
+    String? deloadSourceDayId,
+    DeloadDayPreset? deloadPreset,
+    double? deloadWeightPercent,
+    double? deloadSetRatio,
+    double? deloadRepRatio,
     List<ProgramExercise>? exercises,
   }) => ProgramDay(
     id: id ?? this.id,
     name: name ?? this.name,
     kind: kind ?? this.kind,
+    deloadSourceDayId: deloadSourceDayId ?? this.deloadSourceDayId,
+    deloadPreset: deloadPreset ?? this.deloadPreset,
+    deloadWeightPercent: deloadWeightPercent ?? this.deloadWeightPercent,
+    deloadSetRatio: deloadSetRatio ?? this.deloadSetRatio,
+    deloadRepRatio: deloadRepRatio ?? this.deloadRepRatio,
     exercises: exercises ?? this.exercises,
   );
 }
@@ -223,9 +273,23 @@ ProgramDay createDeloadDayFrom({
   DeloadDayPreset preset = DeloadDayPreset.standard,
   double weightPercent = 70,
   double setRatio = 1,
+  double repRatio = 1,
 }) {
   int atLeastOne(int value) => value < 1 ? 1 : value;
   double roundOneDecimal(double value) => (value * 10).roundToDouble() / 10;
+  final effectiveWeightPercent = switch (preset) {
+    DeloadDayPreset.volume => 100.0,
+    DeloadDayPreset.standard || DeloadDayPreset.custom => weightPercent,
+  };
+  final effectiveSetRatio = switch (preset) {
+    DeloadDayPreset.volume || DeloadDayPreset.standard => 1.0,
+    DeloadDayPreset.custom => setRatio,
+  };
+  final effectiveRepRatio = switch (preset) {
+    DeloadDayPreset.volume => 0.5,
+    DeloadDayPreset.standard => 1.0,
+    DeloadDayPreset.custom => repRatio,
+  };
 
   final exercises = <ProgramExercise>[];
   for (var i = 0; i < baseDay.exercises.length; i += 1) {
@@ -237,24 +301,26 @@ ProgramDay createDeloadDayFrom({
       ),
     };
     final targetSets = switch (preset) {
-      DeloadDayPreset.volume => atLeastOne(source.targetSets ~/ 2),
-      DeloadDayPreset.standard => source.targetSets,
+      DeloadDayPreset.volume || DeloadDayPreset.standard => source.targetSets,
       DeloadDayPreset.custom => atLeastOne(
         (source.targetSets * setRatio).floor(),
       ),
     };
     final targetMinReps = switch (preset) {
       DeloadDayPreset.volume => atLeastOne(source.minReps ~/ 2),
-      DeloadDayPreset.standard || DeloadDayPreset.custom => source.minReps,
+      DeloadDayPreset.standard => source.minReps,
+      DeloadDayPreset.custom => atLeastOne((source.minReps * repRatio).floor()),
     };
     final targetMaxReps = switch (preset) {
       DeloadDayPreset.volume => atLeastOne(source.maxReps ~/ 2),
-      DeloadDayPreset.standard || DeloadDayPreset.custom => source.maxReps,
+      DeloadDayPreset.standard => source.maxReps,
+      DeloadDayPreset.custom => atLeastOne((source.maxReps * repRatio).floor()),
     };
 
     exercises.add(
       source.copyWith(
         id: exerciseIdBuilder(i, source),
+        deloadSourceExerciseId: source.id,
         targetSets: targetSets,
         minReps: targetMinReps,
         maxReps: targetMaxReps,
@@ -271,6 +337,11 @@ ProgramDay createDeloadDayFrom({
     id: id,
     name: name,
     kind: DayKind.deload,
+    deloadSourceDayId: baseDay.id,
+    deloadPreset: preset,
+    deloadWeightPercent: effectiveWeightPercent,
+    deloadSetRatio: effectiveSetRatio,
+    deloadRepRatio: effectiveRepRatio,
     exercises: exercises,
   );
 }
@@ -632,6 +703,88 @@ class TrainingProgram {
     );
   }
 
+  TrainingProgram reorderDay(
+    int oldIndex,
+    int newIndex, {
+    DateTime? reorderedAt,
+  }) {
+    if (oldIndex < 0 || oldIndex >= days.length) return this;
+    if (newIndex < 0 || newIndex >= days.length) return this;
+    if (newIndex == oldIndex) return this;
+
+    final currentDayId = days.isEmpty
+        ? null
+        : days[normalizedCurrentDayIndex].id;
+    final activatedDayId = days.isEmpty
+        ? null
+        : days[normalizedActivatedDayIndex].id;
+
+    final nextDays = [...days];
+    final moved = nextDays.removeAt(oldIndex);
+    nextDays.insert(newIndex, moved);
+
+    final nextCurrentIndex = currentDayId == null
+        ? 0
+        : nextDays.indexWhere((day) => day.id == currentDayId);
+    final nextActivatedIndex = activatedDayId == null
+        ? 0
+        : nextDays.indexWhere((day) => day.id == activatedDayId);
+
+    return copyWith(
+      days: nextDays,
+      currentDayIndex: nextCurrentIndex < 0 ? 0 : nextCurrentIndex,
+      activatedDayIndex: nextActivatedIndex < 0 ? 0 : nextActivatedIndex,
+      updatedAt: reorderedAt ?? DateTime.now(),
+    );
+  }
+
+  TrainingProgram refreshLinkedDeloadsForDay(
+    String sourceDayId, {
+    DateTime? refreshedAt,
+  }) {
+    final sourceIndex = days.indexWhere((day) => day.id == sourceDayId);
+    if (sourceIndex < 0) return this;
+
+    final sourceDay = days[sourceIndex];
+    var changed = false;
+    final nextDays = <ProgramDay>[];
+
+    for (final day in days) {
+      final isLinkedDeload = day.deloadSourceDayId == sourceDayId;
+      final isInferredLegacyDeload =
+          !isLinkedDeload &&
+          _isObviousLegacyDeloadForSource(day, sourceDay, days);
+
+      if (!isLinkedDeload && !isInferredLegacyDeload) {
+        nextDays.add(day);
+        continue;
+      }
+
+      changed = true;
+      final usedDeloadExerciseIds = <String>{};
+      nextDays.add(
+        createDeloadDayFrom(
+          baseDay: sourceDay,
+          id: day.id,
+          name: day.name,
+          exerciseIdBuilder: (index, source) => _linkedDeloadExerciseId(
+            day,
+            index,
+            source,
+            usedDeloadExerciseIds,
+          ),
+          preset: day.deloadPreset ?? DeloadDayPreset.standard,
+          weightPercent: day.deloadWeightPercent ?? 70,
+          setRatio: day.deloadSetRatio ?? 1,
+          repRatio: day.deloadRepRatio ?? 1,
+        ),
+      );
+    }
+
+    if (!changed) return this;
+    return copyWith(days: nextDays, updatedAt: refreshedAt ?? DateTime.now());
+  }
+
   TrainingProgram copyWith({
     String? id,
     String? userId,
@@ -697,6 +850,142 @@ class TrainingProgram {
   }
 }
 
+String _linkedDeloadExerciseId(
+  ProgramDay deloadDay,
+  int sourceIndex,
+  ProgramExercise source,
+  Set<String> usedIds,
+) {
+  ProgramExercise? findUnused(
+    bool Function(ProgramExercise exercise, int index) matches,
+  ) {
+    for (var i = 0; i < deloadDay.exercises.length; i += 1) {
+      final exercise = deloadDay.exercises[i];
+      if (usedIds.contains(exercise.id)) continue;
+      if (matches(exercise, i)) return exercise;
+    }
+    return null;
+  }
+
+  final linked = findUnused(
+    (exercise, _) => exercise.deloadSourceExerciseId == source.id,
+  );
+  if (linked != null) {
+    usedIds.add(linked.id);
+    return linked.id;
+  }
+
+  if (sourceIndex < deloadDay.exercises.length) {
+    final indexed = deloadDay.exercises[sourceIndex];
+    if (!usedIds.contains(indexed.id) &&
+        indexed.exerciseId == source.exerciseId) {
+      usedIds.add(indexed.id);
+      return indexed.id;
+    }
+  }
+
+  final byExerciseId = findUnused(
+    (exercise, _) => exercise.exerciseId == source.exerciseId,
+  );
+  if (byExerciseId != null) {
+    usedIds.add(byExerciseId.id);
+    return byExerciseId.id;
+  }
+
+  return 'deload_${deloadDay.id}_${sourceIndex}_${source.id}';
+}
+
+bool _isObviousLegacyDeloadForSource(
+  ProgramDay deloadDay,
+  ProgramDay sourceDay,
+  List<ProgramDay> allDays,
+) {
+  if (deloadDay.kind != DayKind.deload ||
+      deloadDay.deloadSourceDayId != null ||
+      sourceDay.kind != DayKind.training) {
+    return false;
+  }
+
+  var bestScore = 0;
+  final bestSourceIds = <String>[];
+  for (final candidate in allDays) {
+    if (candidate.kind != DayKind.training) continue;
+
+    final score = _legacyDeloadSourceMatchScore(deloadDay, candidate);
+    if (score <= 0) continue;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestSourceIds
+        ..clear()
+        ..add(candidate.id);
+    } else if (score == bestScore) {
+      bestSourceIds.add(candidate.id);
+    }
+  }
+
+  return bestSourceIds.length == 1 && bestSourceIds.single == sourceDay.id;
+}
+
+int _legacyDeloadSourceMatchScore(ProgramDay deloadDay, ProgramDay sourceDay) {
+  var score = _legacyDeloadExerciseMatchScore(deloadDay, sourceDay);
+  if (_legacyDeloadNameMatches(deloadDay, sourceDay)) {
+    score += 25;
+  }
+  return score;
+}
+
+int _legacyDeloadExerciseMatchScore(
+  ProgramDay deloadDay,
+  ProgramDay sourceDay,
+) {
+  if (deloadDay.exercises.isEmpty || sourceDay.exercises.isEmpty) {
+    return 0;
+  }
+
+  final comparedLength = deloadDay.exercises.length < sourceDay.exercises.length
+      ? deloadDay.exercises.length
+      : sourceDay.exercises.length;
+  var orderedMatches = 0;
+  for (var i = 0; i < comparedLength; i += 1) {
+    if (deloadDay.exercises[i].exerciseId ==
+        sourceDay.exercises[i].exerciseId) {
+      orderedMatches += 1;
+    }
+  }
+
+  final deloadExerciseCount = deloadDay.exercises.length;
+  if (orderedMatches == deloadExerciseCount &&
+      deloadExerciseCount == sourceDay.exercises.length) {
+    return 100;
+  }
+  if (orderedMatches == deloadExerciseCount &&
+      deloadExerciseCount <= sourceDay.exercises.length &&
+      deloadExerciseCount >= 2) {
+    return 90;
+  }
+
+  final requiredMostMatches = ((deloadExerciseCount * 3) / 4).ceil();
+  if (orderedMatches >= 2 && orderedMatches >= requiredMostMatches) {
+    return 70;
+  }
+
+  return 0;
+}
+
+bool _legacyDeloadNameMatches(ProgramDay deloadDay, ProgramDay sourceDay) {
+  final deloadName = _normalizedLegacyDeloadName(deloadDay.name);
+  final sourceName = _normalizedLegacyDeloadName(sourceDay.name);
+  if (sourceName.length < 3 || deloadName.isEmpty) {
+    return false;
+  }
+
+  return deloadName == sourceName || deloadName.contains(sourceName);
+}
+
+String _normalizedLegacyDeloadName(String name) =>
+    name.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+
 List<ProgramPausePeriod> _mergePausePeriods(List<ProgramPausePeriod> periods) {
   final sorted =
       periods
@@ -759,14 +1048,32 @@ bool _pausePeriodListsEqual(
   return true;
 }
 
+/// Selects the active program for [date].
+///
+/// Future scheduled programs are active records with a future [activatedAt].
+/// They are ignored before their start date, so a future-only schedule returns
+/// null until it starts.
 TrainingProgram? activeTrainingProgramForUser(
   List<TrainingProgram> programs,
-  String userId,
-) {
+  String userId, {
+  DateTime? date,
+}) {
+  final target = _dateOnly(date ?? DateTime.now());
+  TrainingProgram? selected;
+  DateTime? selectedStart;
   for (final program in programs) {
-    if (program.active && program.userId == userId) return program;
+    if (!program.active || program.userId != userId) continue;
+    final start = _dateOnly(program.activatedAt ?? program.updatedAt);
+    if (start.isAfter(target)) continue;
+    if (selected == null ||
+        start.isAfter(selectedStart!) ||
+        (start == selectedStart &&
+            program.updatedAt.isAfter(selected.updatedAt))) {
+      selected = program;
+      selectedStart = start;
+    }
   }
-  return null;
+  return selected;
 }
 
 class WorkoutPrescription {

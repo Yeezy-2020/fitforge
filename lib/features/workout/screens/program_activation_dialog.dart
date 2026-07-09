@@ -38,6 +38,8 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setDialogState) {
+        final today = DateTime(now.year, now.month, now.day);
+        final isFutureStart = startDate.isAfter(today);
         final cycles = int.tryParse(cyclesController.text.trim());
         final canPreview =
             durationMode == _ActivationDurationMode.finite &&
@@ -105,6 +107,15 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
                     });
                   },
                 ),
+                if (isFutureStart) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.format('activationFutureStartNotice', {
+                      'date': l10n.shortDate(startDate),
+                    }),
+                    style: Theme.of(dialogContext).textTheme.bodySmall,
+                  ),
+                ],
                 const SizedBox(height: 12),
                 SegmentedButton<_ActivationDurationMode>(
                   segments: [
@@ -186,7 +197,9 @@ Future<ProgramActivationConfig?> showProgramActivationDialog({
                         ),
                       );
                     },
-              child: Text(l10n.get('activate')),
+              child: Text(
+                l10n.get(isFutureStart ? 'scheduleProgram' : 'activate'),
+              ),
             ),
           ],
         );

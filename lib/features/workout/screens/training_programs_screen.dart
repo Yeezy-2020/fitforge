@@ -348,6 +348,7 @@ class _ProgramCard extends StatelessWidget {
     final deloadDays = program.days
         .where((d) => d.kind == DayKind.deload)
         .length;
+    final isScheduled = _isProgramScheduled(program);
 
     return Card(
       child: InkWell(
@@ -372,14 +373,18 @@ class _ProgramCard extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.shade100,
+                              color: isScheduled
+                                  ? Colors.orange.shade100
+                                  : Colors.green.shade100,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              l10n.get('active'),
+                              l10n.get(isScheduled ? 'scheduled' : 'active'),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Colors.green.shade800,
+                                color: isScheduled
+                                    ? Colors.orange.shade900
+                                    : Colors.green.shade800,
                               ),
                             ),
                           ),
@@ -474,6 +479,9 @@ class _ProgramCard extends StatelessWidget {
       'training': trainingDays.toString(),
     });
     final cycles = program.plannedCycleCount;
+    if (_isProgramScheduled(program)) {
+      return '$base · ${l10n.format('scheduledStartDate', {'date': l10n.shortDate(program.activatedAt!)})}';
+    }
     if (cycles == null) {
       return '$base · ${l10n.get('plannedContinuously')}';
     }
@@ -484,3 +492,12 @@ class _ProgramCard extends StatelessWidget {
     return '$base · $duration';
   }
 }
+
+bool _isProgramScheduled(TrainingProgram program) {
+  final activatedAt = program.activatedAt;
+  if (!program.active || activatedAt == null) return false;
+  return _dateOnly(activatedAt).isAfter(_dateOnly(DateTime.now()));
+}
+
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);

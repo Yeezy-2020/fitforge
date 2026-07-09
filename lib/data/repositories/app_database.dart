@@ -173,14 +173,44 @@ class AppDatabase {
     List<TrainingProgram> programs,
   ) {
     final now = DateTime.now();
-    var foundActive = false;
-    return programs.map((program) {
-      if (!program.active) return program;
-      if (!foundActive) {
-        foundActive = true;
-        return _withActivationMetadata(program, now);
+    final today = _dateOnly(now);
+    final withMetadata = programs
+        .map((program) => _withActivationMetadata(program, now))
+        .toList();
+
+    TrainingProgram? currentProgram;
+    DateTime? currentStart;
+    TrainingProgram? futureProgram;
+    DateTime? futureStart;
+
+    for (final program in withMetadata) {
+      if (!program.active) continue;
+      final start = _dateOnly(program.activatedAt ?? program.updatedAt);
+      if (start.isAfter(today)) {
+        if (futureProgram == null ||
+            program.updatedAt.isAfter(futureProgram.updatedAt) ||
+            (program.updatedAt == futureProgram.updatedAt &&
+                start.isAfter(futureStart!))) {
+          futureProgram = program;
+          futureStart = start;
+        }
+        continue;
       }
-      return program.copyWith(active: false);
+
+      if (currentProgram == null ||
+          start.isAfter(currentStart!) ||
+          (start == currentStart &&
+              program.updatedAt.isAfter(currentProgram.updatedAt))) {
+        currentProgram = program;
+        currentStart = start;
+      }
+    }
+
+    return withMetadata.map((program) {
+      if (!program.active) return program;
+      final keep =
+          program.id == currentProgram?.id || program.id == futureProgram?.id;
+      return keep ? program : program.copyWith(active: false);
     }).toList();
   }
 
@@ -219,13 +249,15 @@ class AppDatabase {
     }
     final now = DateTime.now();
     final normalized = program.active
-        ? programs
-              .map(
-                (p) => p.id == program.id
-                    ? _withActivationMetadata(p.copyWith(active: true), now)
-                    : p.copyWith(active: false),
-              )
-              .toList()
+        ? _normalizeActiveTrainingPrograms(
+            programs
+                .map(
+                  (p) => p.id == program.id
+                      ? _withActivationMetadata(p.copyWith(active: true), now)
+                      : p,
+                )
+                .toList(),
+          )
         : _normalizeActiveTrainingPrograms(programs);
     await saveTrainingPrograms(userId, normalized);
   }
@@ -241,10 +273,7 @@ class AppDatabase {
 
   Future<TrainingProgram?> getActiveTrainingProgram(String userId) async {
     final programs = await getTrainingPrograms(userId);
-    for (final p in programs) {
-      if (p.active) return p;
-    }
-    return null;
+    return activeTrainingProgramForUser(programs, userId);
   }
 
   Future<void> setActiveTrainingProgram(
@@ -257,11 +286,23 @@ class AppDatabase {
     if (!programs.any((p) => p.id == programId)) return;
     final now = DateTime.now();
     final start = activatedAt ?? now;
+    final futureActivation = _dateOnly(start).isAfter(_dateOnly(now));
     for (int i = 0; i < programs.length; i++) {
       final program = programs[i];
       final activating = program.id == programId;
+      final shouldDeactivate =
+          !activating &&
+          program.active &&
+          (!futureActivation ||
+              _dateOnly(
+                program.activatedAt ?? program.updatedAt,
+              ).isAfter(_dateOnly(now)));
       final updated = program.copyWith(
-        active: activating,
+        active: activating
+            ? true
+            : shouldDeactivate
+            ? false
+            : program.active,
         activatedAt: activating ? start : program.activatedAt,
         activatedDayIndex: activating
             ? program.normalizedCurrentDayIndex
@@ -685,6 +726,8 @@ class AppDatabase {
       '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
+
+  DateTime _dateOnly(DateTime d) => DateTime.utc(d.year, d.month, d.day);
 
   Future<List<String>> _getStringList(String userId, String type) async {
     final data = await _storage.read(key: _key(userId, type));

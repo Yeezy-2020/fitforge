@@ -446,7 +446,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final trainUnit = ref.watch(trainingWeightUnitProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final l10n2 = ref.watch(l10nProvider);
-    final activeProgram = ref.watch(activeTrainingProgramProvider);
+    final activeProgram = ref.watch(
+      activeTrainingProgramForDateProvider(widget.date),
+    );
     final programPrescriptions =
         ref
             .watch(workoutPrescriptionsForDateProvider(widget.date))

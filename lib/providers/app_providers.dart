@@ -407,6 +407,13 @@ final activeTrainingProgramProvider = Provider<TrainingProgram?>((ref) {
   return activeTrainingProgramForUser(programs, userId);
 });
 
+final activeTrainingProgramForDateProvider =
+    Provider.family<TrainingProgram?, DateTime>((ref, date) {
+      final userId = ref.watch(currentUserIdProvider);
+      final programs = ref.watch(trainingProgramsProvider).valueOrNull ?? [];
+      return activeTrainingProgramForUser(programs, userId, date: date);
+    });
+
 /// Computes a list of [WorkoutPrescription]s for the given [date] based on
 /// the active training program. Today's workout follows the completion-based
 /// current day; other dates use the activation-date calendar projection.
@@ -419,7 +426,7 @@ final workoutPrescriptionsForDateProvider =
       date,
     ) async {
       final userId = ref.watch(currentUserIdProvider);
-      final program = ref.watch(activeTrainingProgramProvider);
+      final program = ref.watch(activeTrainingProgramForDateProvider(date));
       if (program == null) return [];
       if (program.userId != userId) return [];
 
