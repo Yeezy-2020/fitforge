@@ -5,7 +5,7 @@
 > Log every rep. Own every meal.
 
 [![Deploy](https://github.com/Yeezy-2020/fitforge/actions/workflows/deploy.yml/badge.svg)](https://github.com/Yeezy-2020/fitforge/actions/workflows/deploy.yml)
-[![Tests](https://img.shields.io/badge/tests-88%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-flutter__test-blue)]()
 
 ## 平台定位
 
@@ -14,6 +14,10 @@ FitForge 仅支持移动端（iOS / Android），不支持 Web 或桌面端。�
 ## Web 预览地址
 
 [**https://yeezy-2020.github.io/fitforge**](https://yeezy-2020.github.io/fitforge)
+
+## 项目治理文档
+
+持续迭代、风险、质量门禁和任务报告从 [docs/project-management/INDEX.md](docs/project-management/INDEX.md) 进入。README 只保留对外说明和开发入口。
 
 ## 技术栈
 
@@ -25,7 +29,7 @@ FitForge 仅支持移动端（iOS / Android），不支持 Web 或桌面端。�
 | 后端 | Supabase (PostgreSQL / Auth / Storage) |
 | 本地存储 | Flutter Secure Storage |
 | CI/CD | GitHub Actions → GitHub Pages |
-| 测试 | flutter_test (88 项) |
+| 测试 | flutter_test（单元 / Widget / Golden，数量以 `flutter test` 输出为准） |
 
 ## 功能模块
 
@@ -70,11 +74,10 @@ lib/
 ├── main.dart                   # main() 启动
 ├── core/
 │   ├── constants/              # 常量
-│   ├── database/               # 本地数据库抽象
 │   ├── localization/           # L10n 双语字典 (EN/ZH)
 │   ├── services/               # Supabase 服务、同步服务
 │   ├── theme/                  # 亮/暗主题
-│   └── utils/                  # 营养计算器 (NutritionCalculator)
+│   └── utils/                  # 营养、渐进负荷、训练处方计算器
 ├── data/
 │   ├── models/                 # 数据模型
 │   │   ├── exercise.dart       # 动作
@@ -155,8 +158,9 @@ bash scripts/pre_push.sh
 | 交互测试 | 核心流程步骤可推进 | onboarding 步骤数、预设值边界 |
 
 测试文件位置：
-- 模型逻辑 → `test/features/all_features_test.dart`
-- 页面/交互 → `test/screens/<模块>_test.dart`
+- 模型逻辑 → `test/features/*_test.dart`
+- 页面/交互 → `test/screens/*_test.dart`
+- Golden 截图 → `test/screens/goldens/`
 
 ```bash
 # 全量测试（CI 必过）
@@ -180,9 +184,7 @@ flutter build web --release --base-href /fitforge/
 
 ## 测试账号
 
-| 邮箱 | 密码 |
-|------|------|
-| test@fitforge.com | 123456 |
+测试账号由项目 owner 维护。不要在 README 或项目管理文档中保存密码、一次性验证码或私有凭据。
 
 ## 部署后验证
 
@@ -213,7 +215,7 @@ flutter build web --release --base-href /fitforge/
 bash scripts/pre_push.sh
 ```
 
-脚本会依次执行：`flutter analyze` → `flutter test`（88 项） → widget dump → dead button scan。**任何一项失败均不允许推送。**
+脚本会依次执行：`flutter analyze` → `flutter test` → widget dump → dead button scan。**任何一项失败均不允许推送。**
 
 ### 死按钮 (Dead Button) 检查
 
@@ -224,18 +226,19 @@ DEAD=$(grep -rn "onPressed: () => {}" lib/ --include="*.dart" | wc -l)
 # 结果必须为 0
 ```
 
-CI 也会执行此项检查。如需占位按钮，请使用条件禁用（`onPressed: condition ? fn : null`）而非空回调。
+如需占位按钮，请使用条件禁用（`onPressed: condition ? fn : null`）而非空回调。当前 CI 至少执行 `flutter test` 和 Web build；dead button scan 由本地 `scripts/pre_push.sh` 覆盖，后续应纳入 CI 门禁。
 
 ### flutter analyze 已知警告
 
-以下 8 个 info 级别警告属于已知项，不会阻止构建或测试：
+截至 2026-07-09，`flutter analyze --no-fatal-infos --no-fatal-warnings` 通过，但有以下已知 info 级 baseline，不会阻止构建或测试：
 
 | 文件 | 警告 | 原因 |
 |------|------|------|
-| `diet_log_screen.dart:106` | `use_build_context_synchronously` | 跨 async 使用 context |
-| `settings_screen.dart:45` | `groupValue` deprecated | 等待替换为 RadioGroup |
+| `settings_screen.dart:45` | `groupValue` / `onChanged` deprecated | 等待替换为 RadioGroup |
+| `paywall_screen.dart:17-18` | `use_build_context_synchronously` | 跨 async 使用 context |
 | `exercise_detail_screen.dart:25` | `unnecessary_underscores` | 待清理 |
-| `workout_calendar_screen.dart:173` | `onReorder` deprecated | 待迁移到 onReorderItem |
+| `workout_calendar_screen.dart:541` | `onReorder` deprecated | 待迁移到 onReorderItem |
+| `app_providers.dart:66` | `unnecessary_underscores` | 待清理 |
 | `test/dump_test.dart:30-38` | `avoid_print` | 测试用 print，无影响 |
 
 禁止引入新的 error 或 warning 级别问题。
@@ -258,7 +261,6 @@ git config --local --unset https.proxy
 - **项目 URL**: `https://ofkdjqfamtuwfzyfncvt.supabase.co`
 - **认证**: Supabase Auth（邮箱密码 + Google/Apple TODO）
 - **数据**: 本地优先（SecureStorage），Supabase 仅作同步
-- 测试账号：`test@fitforge.com` / `123456`
 
 ### 图片反馈流程
 

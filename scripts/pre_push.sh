@@ -1,16 +1,26 @@
 #!/bin/bash
 set -e
-export PATH="/opt/flutter/bin:$PATH"
+
+if [ -x "/home/dyy/flutter/bin/flutter" ]; then
+  FLUTTER="/home/dyy/flutter/bin/flutter"
+elif [ -x "/opt/flutter/bin/flutter" ]; then
+  FLUTTER="/opt/flutter/bin/flutter"
+else
+  FLUTTER="flutter"
+fi
+
+export NO_PROXY="localhost,127.0.0.1,${NO_PROXY:-}"
+export no_proxy="localhost,127.0.0.1,${no_proxy:-}"
 
 echo "=== 1. flutter analyze ==="
-flutter analyze --no-fatal-infos --no-fatal-warnings
+"$FLUTTER" analyze --no-fatal-infos --no-fatal-warnings
 echo "PASS"
 
 echo "=== 2. flutter test ==="
-flutter test 2>&1 | grep -q "All tests passed" && echo "PASS" || { echo "FAILED"; exit 1; }
+"$FLUTTER" test 2>&1 | grep -q "All tests passed" && echo "PASS" || { echo "FAILED"; exit 1; }
 
 echo "=== 3. Widget dump ==="
-flutter test test/dump_test.dart --plain-name "pill" 2>&1 | grep "^\[" || echo "(skipped)"
+"$FLUTTER" test test/dump_test.dart --plain-name "pill" 2>&1 | grep "^\[" || echo "(skipped)"
 
 echo "=== 4. Dead button check ==="
 DEAD=$(grep -rn "onPressed: () => {}" lib/ --include="*.dart" | wc -l)
