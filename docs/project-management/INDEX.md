@@ -1,6 +1,6 @@
 # FitForge Project Management Index
 
-last_verified_commit: `79d65df`
+last_verified_commit: `750c2b2`
 last_verified_date: `2026-07-09 UTC`
 owner_skill: `/home/dyy/.codex/skills/fitforge-general-contractor/SKILL.md`
 repo_path: `/home/dyy/fitforge`
@@ -24,6 +24,7 @@ This directory is the local server-side project management knowledge base for Fi
 - `task-reports/2026-07-09-project-governance-bootstrap.md`: initial project-management knowledge-base bootstrap and README drift cleanup.
 - `task-reports/2026-07-09-training-program-smoke-and-cycle-wording.md`: training-program smoke checklist plus cycle-neutral progression model cleanup.
 - `task-reports/2026-07-09-long-gap-backlog-audit.md`: long-gap recovery prompt implementation audit and backlog correction.
+- `task-reports/2026-07-09-long-gap-provider-regression-tests.md`: provider-level long-gap recovery regression tests.
 
 ## Source Of Truth Order
 
@@ -47,6 +48,6 @@ Do not store secrets, private credentials, one-time device codes, raw environmen
 
 ## Current Local State
 
-- Current branch was last observed as `main`, ahead of `origin/main` by at least 3 local commits before this task's commit.
+- Current branch was last observed as `main`, ahead of `origin/main` by at least 4 local commits before this task's commit.
 - `HANDOFF.md` is ignored and treated as a temporary local handoff artifact.
-- Latest local commit before this task: `79d65df` (`Clarify training cycles and smoke checklist`).
+- Latest local commit before this task: `750c2b2` (`Update training program backlog priorities`).

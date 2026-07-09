@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:fitforge/providers/app_providers.dart';
 import 'package:fitforge/data/models/training_program.dart';
 import 'package:fitforge/data/models/workout_log.dart';
 import 'package:fitforge/data/repositories/app_database.dart';
@@ -1907,6 +1909,312 @@ void main() {
         expect(byId['replacement']?.plannedCycleCount, isNull);
       },
     );
+  });
+
+  group('workoutPrescriptionsForDateProvider long-gap recovery', () {
+    const userId = 'user1';
+    const programId = 'program1';
+    final selectedDate = DateTime(2025, 6, 20);
+
+    setUp(() {
+      FlutterSecureStorage.setMockInitialValues({});
+    });
+
+    ProgramExercise programExercise({
+      required String id,
+      required String exerciseId,
+      int sortOrder = 0,
+    }) => ProgramExercise(
+      id: id,
+      exerciseId: exerciseId,
+      targetSets: 3,
+      minReps: 8,
+      maxReps: 12,
+      startingWeightKg: 40,
+      sortOrder: sortOrder,
+    );
+
+    TrainingProgram activeProgram(List<ProgramExercise> exercises) {
+      final createdAt = DateTime(2025, 5, 1);
+      return TrainingProgram(
+        id: programId,
+        userId: userId,
+        name: 'Program',
+        active: true,
+        activatedAt: DateTime(2025, 6, 1),
+        createdAt: createdAt,
+        updatedAt: createdAt,
+        days: [ProgramDay(id: 'day1', name: 'Day 1', exercises: exercises)],
+      );
+    }
+
+    WorkoutLog workoutLog({
+      required String id,
+      required DateTime date,
+      required String exerciseId,
+      int sets = 3,
+      int reps = 10,
+      double weightKg = 100,
+    }) => WorkoutLog(
+      id: id,
+      userId: userId,
+      exerciseId: exerciseId,
+      date: date,
+      sets: sets,
+      reps: reps,
+      weightKg: weightKg,
+    );
+
+    WorkoutSetLog setLog({
+      required String id,
+      required String workoutLogId,
+      required String programId,
+      required String programExerciseId,
+    }) => WorkoutSetLog(
+      id: id,
+      workoutLogId: workoutLogId,
+      programId: programId,
+      programExerciseId: programExerciseId,
+      setIndex: 0,
+      reps: 10,
+      weightKg: 100,
+      completed: true,
+    );
+
+    Future<List<WorkoutPrescription>> readPrescriptions() async {
+      final container = ProviderContainer(
+        overrides: [currentUserIdProvider.overrideWith((ref) => userId)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(trainingProgramsProvider.future);
+      return container.read(
+        workoutPrescriptionsForDateProvider(selectedDate).future,
+      );
+    }
+
+    test(
+      'offers recovery load with last logged values after more than 7 days',
+      () async {
+        final database = AppDatabase.instance;
+        await database.saveTrainingPrograms(userId, [
+          activeProgram([
+            programExercise(id: 'pe_bench', exerciseId: 'ex_bench'),
+          ]),
+        ]);
+        await database.addWorkoutLog(
+          userId,
+          workoutLog(
+            id: 'log_bench',
+            exerciseId: 'ex_bench',
+            date: selectedDate.subtract(const Duration(days: 8)),
+            sets: 4,
+            reps: 9,
+            weightKg: 82.5,
+          ),
+        );
+        await database.saveWorkoutSetLogs(userId, [
+          setLog(
+            id: 'set_bench',
+            workoutLogId: 'log_bench',
+            programId: programId,
+            programExerciseId: 'pe_bench',
+          ),
+        ]);
+
+        final rx = (await readPrescriptions()).single;
+
+        expect(rx.programId, programId);
+        expect(rx.programExerciseId, 'pe_bench');
+        expect(rx.daysSinceLastLog, 8);
+        expect(rx.shouldOfferRecoveryLoad, isTrue);
+        expect(rx.lastLoggedSets, 4);
+        expect(rx.lastLoggedReps, 9);
+        expect(rx.lastLoggedWeightKg, 82.5);
+      },
+    );
+
+    test('does not offer recovery load at exactly 7 days', () async {
+      final database = AppDatabase.instance;
+      await database.saveTrainingPrograms(userId, [
+        activeProgram([
+          programExercise(id: 'pe_bench', exerciseId: 'ex_bench'),
+        ]),
+      ]);
+      await database.addWorkoutLog(
+        userId,
+        workoutLog(
+          id: 'log_bench',
+          exerciseId: 'ex_bench',
+          date: selectedDate.subtract(const Duration(days: 7)),
+        ),
+      );
+      await database.saveWorkoutSetLogs(userId, [
+        setLog(
+          id: 'set_bench',
+          workoutLogId: 'log_bench',
+          programId: programId,
+          programExerciseId: 'pe_bench',
+        ),
+      ]);
+
+      final rx = (await readPrescriptions()).single;
+
+      expect(rx.shouldOfferRecoveryLoad, isFalse);
+      expect(rx.daysSinceLastLog, isNull);
+      expect(rx.lastLoggedSets, isNull);
+      expect(rx.lastLoggedReps, isNull);
+      expect(rx.lastLoggedWeightKg, isNull);
+    });
+
+    test('uses the latest same-slot log when deciding recovery', () async {
+      final database = AppDatabase.instance;
+      await database.saveTrainingPrograms(userId, [
+        activeProgram([
+          programExercise(id: 'pe_bench', exerciseId: 'ex_bench'),
+        ]),
+      ]);
+      await database.addWorkoutLog(
+        userId,
+        workoutLog(
+          id: 'log_old_stale',
+          exerciseId: 'ex_bench',
+          date: selectedDate.subtract(const Duration(days: 10)),
+          sets: 5,
+          reps: 10,
+          weightKg: 100,
+        ),
+      );
+      await database.addWorkoutLog(
+        userId,
+        workoutLog(
+          id: 'log_latest',
+          exerciseId: 'ex_bench',
+          date: selectedDate.subtract(const Duration(days: 3)),
+          sets: 3,
+          reps: 8,
+          weightKg: 72.5,
+        ),
+      );
+      await database.saveWorkoutSetLogs(userId, [
+        setLog(
+          id: 'set_old_stale',
+          workoutLogId: 'log_old_stale',
+          programId: programId,
+          programExerciseId: 'pe_bench',
+        ),
+        setLog(
+          id: 'set_latest',
+          workoutLogId: 'log_latest',
+          programId: programId,
+          programExerciseId: 'pe_bench',
+        ),
+      ]);
+
+      final rx = (await readPrescriptions()).single;
+
+      expect(rx.shouldOfferRecoveryLoad, isFalse);
+      expect(rx.daysSinceLastLog, isNull);
+      expect(rx.sets, 3);
+      expect(rx.reps, 9);
+      expect(rx.weightKg, 72.5);
+    });
+
+    test(
+      'scopes recovery lookup to the same program and program exercise slot',
+      () async {
+        final database = AppDatabase.instance;
+        await database.saveTrainingPrograms(userId, [
+          activeProgram([
+            programExercise(
+              id: 'pe_target',
+              exerciseId: 'ex_bench',
+              sortOrder: 0,
+            ),
+            programExercise(
+              id: 'pe_other',
+              exerciseId: 'ex_bench',
+              sortOrder: 1,
+            ),
+          ]),
+        ]);
+        await database.addWorkoutLog(
+          userId,
+          workoutLog(
+            id: 'log_other_slot',
+            exerciseId: 'ex_bench',
+            date: selectedDate.subtract(const Duration(days: 8)),
+          ),
+        );
+        await database.addWorkoutLog(
+          userId,
+          workoutLog(
+            id: 'log_other_program',
+            exerciseId: 'ex_bench',
+            date: selectedDate.subtract(const Duration(days: 9)),
+          ),
+        );
+        await database.saveWorkoutSetLogs(userId, [
+          setLog(
+            id: 'set_other_slot',
+            workoutLogId: 'log_other_slot',
+            programId: programId,
+            programExerciseId: 'pe_other',
+          ),
+          setLog(
+            id: 'set_other_program',
+            workoutLogId: 'log_other_program',
+            programId: 'other_program',
+            programExerciseId: 'pe_target',
+          ),
+        ]);
+
+        final prescriptions = await readPrescriptions();
+        final bySlot = {
+          for (final rx in prescriptions) rx.programExerciseId: rx,
+        };
+
+        expect(bySlot['pe_target']?.shouldOfferRecoveryLoad, isFalse);
+        expect(bySlot['pe_target']?.daysSinceLastLog, isNull);
+        expect(bySlot['pe_other']?.shouldOfferRecoveryLoad, isTrue);
+        expect(bySlot['pe_other']?.daysSinceLastLog, 8);
+      },
+    );
+
+    test('does not read recovery logs from another user', () async {
+      final database = AppDatabase.instance;
+      await database.saveTrainingPrograms(userId, [
+        activeProgram([
+          programExercise(id: 'pe_bench', exerciseId: 'ex_bench'),
+        ]),
+      ]);
+      await database.addWorkoutLog(
+        'user2',
+        WorkoutLog(
+          id: 'log_user2',
+          userId: 'user2',
+          exerciseId: 'ex_bench',
+          date: selectedDate.subtract(const Duration(days: 8)),
+          sets: 4,
+          reps: 9,
+          weightKg: 82.5,
+        ),
+      );
+      await database.saveWorkoutSetLogs('user2', [
+        setLog(
+          id: 'set_user2',
+          workoutLogId: 'log_user2',
+          programId: programId,
+          programExerciseId: 'pe_bench',
+        ),
+      ]);
+
+      final rx = (await readPrescriptions()).single;
+
+      expect(rx.shouldOfferRecoveryLoad, isFalse);
+      expect(rx.daysSinceLastLog, isNull);
+      expect(rx.lastLoggedSets, isNull);
+    });
   });
 
   group('WorkoutSetLog', () {
