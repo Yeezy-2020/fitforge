@@ -1,6 +1,6 @@
 # FitForge Roadmap
 
-last_verified_commit: `800a1f1`
+last_verified_commit: `79d65df`
 last_verified_date: `2026-07-09 UTC`
 
 This roadmap covers the next 1-3 months at a lightweight internet-product planning level. It should guide sequencing, not freeze scope.
@@ -16,7 +16,7 @@ Goals:
 Candidate work:
 
 - Execute the mobile smoke checklist for program creation, edit, activation, date scheduling, pause/resume/end, deload, logging, and advancement.
-- Long-gap recovery prompt design and implementation.
+- Long-gap recovery prompt manual smoke and provider/widget regression coverage.
 - Training-program UI split plan for `program_detail_screen.dart` and `workout_day_screen.dart`.
 - Keep cycle-vs-week wording clean as future progression and scheduling copy changes.
 

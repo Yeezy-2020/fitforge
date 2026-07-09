@@ -1,6 +1,6 @@
 # FitForge Risk Register
 
-last_verified_commit: `71b38dfc3f8b`
+last_verified_commit: `79d65df`
 last_verified_date: `2026-07-09 UTC`
 
 Use this register for active product, architecture, data, release, and AI-operation risks. Re-verify each risk against code before acting on it.
@@ -14,10 +14,10 @@ Use this register for active product, architecture, data, release, and AI-operat
 | R-05 | P1 | Persistence | SecureStorage stores JSON blobs without schema versioning, migration tests, or corruption recovery. | Field changes can break existing local data. | Medium | Add storage versioning, migration tests, and conservative decode fallback. | Model/schema changes. | Data |
 | R-06 | P1 | i18n / units | Visible hard-coded text can remain outside L10n, especially in complex screens. | Chinese/English mode regressions and inconsistent UX. | High | Require L10n for all visible text and add focused widget coverage for new screens. | Any UI feature. | UI |
 | R-07 | P2 | CI / docs | CI does not yet match local pre-push gates, and README can drift from actual tests/analyzer state. | Future agents or maintainers can trust stale docs. | Medium | Add analyze/dead-button checks to CI and keep project-management docs verified by commit. | Before regular release cadence. | Release |
+| R-08 | P1 | QA / mobile-only | Current host has no Android/iOS device or AVD emulator, so the mobile manual smoke checklist cannot be executed here. | Mobile-only touch/layout regressions can escape local verification. | Medium | Provision a physical mobile test device or Android AVD, then execute `TRAINING_PROGRAM_SMOKE_CHECKLIST.md`. | Before mobile release or after touch-heavy training-program changes. | Release / UI |
 
 ## Priority Summary
 
 - P0: R-01, R-02, R-03
-- P1: R-04, R-05, R-06
+- P1: R-04, R-05, R-06, R-08
 - P2: R-07
-

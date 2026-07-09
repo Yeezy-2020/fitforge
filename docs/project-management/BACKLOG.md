@@ -1,6 +1,6 @@
 # FitForge Backlog
 
-last_verified_commit: `800a1f1`
+last_verified_commit: `79d65df`
 last_verified_date: `2026-07-09 UTC`
 
 This backlog is a working queue. Re-rank it when product goals change or after major implementation work.
@@ -21,7 +21,7 @@ This backlog is a working queue. Re-rank it when product goals change or after m
 
 ## P1
 
-- Feature: Add long-gap recovery prompt when returning after a long break from a program slot.
+- Tech debt: Add provider/widget regression tests for the existing long-gap recovery prompt, including the `> 7` day threshold and Add All planned-vs-last-load choice.
 - Tech debt: Guard future training-program copy and model names against natural-week wording where behavior is cycle/round based.
 - Tech debt: Split training-program detail UI and move domain rules out of screens.
 - Tech debt: Add storage versioning and migration tests before more local model fields are added.
