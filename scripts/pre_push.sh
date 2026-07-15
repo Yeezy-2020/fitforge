@@ -17,10 +17,27 @@ echo "=== 1. flutter analyze ==="
 echo "PASS"
 
 echo "=== 2. flutter test ==="
-"$FLUTTER" test 2>&1 | grep -q "All tests passed" && echo "PASS" || { echo "FAILED"; exit 1; }
+if "$FLUTTER" test; then
+  echo "PASS"
+else
+  test_status=$?
+  echo "FAILED (flutter test exited with status $test_status)"
+  exit "$test_status"
+fi
 
 echo "=== 3. Widget dump ==="
-"$FLUTTER" test test/dump_test.dart --plain-name "pill" 2>&1 | grep "^\[" || echo "(skipped)"
+widget_dump_log=$(mktemp)
+trap 'rm -f "$widget_dump_log"' EXIT
+if "$FLUTTER" test test/dump_test.dart --plain-name "pill" >"$widget_dump_log" 2>&1; then
+  if ! grep "^\[" "$widget_dump_log"; then
+    echo "(no widget dump lines)"
+  fi
+else
+  widget_dump_status=$?
+  cat "$widget_dump_log"
+  echo "FAILED (widget dump test exited with status $widget_dump_status)"
+  exit "$widget_dump_status"
+fi
 
 echo "=== 4. Dead button check ==="
 DEAD=$(grep -rn "onPressed: () => {}" lib/ --include="*.dart" | wc -l)
