@@ -1,7 +1,7 @@
 # Training Program Smoke Checklist
 
-last_verified_commit: `800a1f1`
-last_verified_date: `2026-07-09 UTC`
+last_verified_commit: `18cb461`
+last_verified_date: `2026-07-15 UTC`
 
 Use this as the repeatable manual checklist for the mobile-only training-program flow. Web/GitHub Pages can help preview, but they are not the supported product target.
 
@@ -17,6 +17,22 @@ Use this as the repeatable manual checklist for the mobile-only training-program
 
 | ID | Result | Device / OS | Locale / Unit | Evidence | Notes |
 |----|--------|-------------|---------------|----------|-------|
+| TP-01 | Pass | Redmi K20 Pro / Android 11 | English / kg | `/tmp/fitforge-smoke/2026-07-15-lan-checklist/TP-01/` | Invalid cycles, blank/starter creation, and starter days passed. |
+| TP-02 | Pass | Redmi K20 Pro / Android 11 | English / kg | `TP-02/`, `TP-08/` | Finite/continuous and projected/continuous summaries passed. |
+| TP-03 | Partial / blocked | Redmi K20 Pro / Android 11 | English / kg | `TP-03/` | CRUD/persistence/button boundary passed; ADB drag did not engage delayed reorder. |
+| TP-04 | Pass | Redmi K20 Pro / Android 11 | English / kg | `TP-04/` | Existing/custom exercise paths passed. |
+| TP-05 | Partial / timeboxed | Redmi K20 Pro / Android 11 | English / kg | `TP-05/` | Standard/no-base/marker passed; volume/custom skipped. |
+| TP-06 | Partial / timeboxed | Redmi K20 Pro / Android 11 | English / kg | `TP-06/` | Weight refresh passed; add/remove matrix skipped. |
+| TP-07 | Partial / timeboxed | Redmi K20 Pro / Android 11 | English / kg | `TP-07/` | Future schedule passed; date-arrival behavior skipped. |
+| TP-08 | Partial / timeboxed | Redmi K20 Pro / Android 11 | English / kg | `TP-08/` | Immediate replacement passed; coexistence matrix skipped. |
+| TP-09 | Partial / timeboxed | Redmi K20 Pro / Android 11 | English / kg | `TP-09/` | Today pause/resume passed; earlier/end skipped. |
+| TP-10 | Partial; happy path pass | Redmi K20 Pro / Android 11 | English / kg | `TP-10/` | Add all/save/advance passed; matrix skipped. |
+| TP-11 | Skipped / timeboxed | Redmi K20 Pro / Android 11 | English / kg | `TP-11/` | Historical same-slot precondition not constructed. |
+| TP-12 | Partial; spot-check pass | Redmi K20 Pro / Android 11 | Chinese/English / lb/kg | `TP-12/` | Chinese and weight conversion spot-check passed; settings restored. |
+| TP-13 | Partial; fast checks pass | Redmi K20 Pro / Android 11 | English / kg | `TP-13/`, `FINAL/` | Restart/rotation/log scan passed; second-account check skipped. |
+
+Paths without an absolute prefix are relative to
+`/tmp/fitforge-smoke/2026-07-15-lan-checklist/`.
 
 ## Manual Smoke Tests
 

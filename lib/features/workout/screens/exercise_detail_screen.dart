@@ -15,23 +15,73 @@ class ExerciseDetailScreen extends ConsumerWidget {
     final isEn = ref.watch(localeProvider) == AppLocale.en;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.exerciseName(exercise.id, exercise.name))),
+      appBar: AppBar(
+        title: Text(l10n.exerciseName(exercise.id, exercise.name)),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (exercise.imageUrl != null) ...[
-            Center(child: ClipRRect(borderRadius: BorderRadius.circular(12),
-              child: Image.network(exercise.imageUrl!, height: 200, fit: BoxFit.contain,
-                errorBuilder: (_, __, _) => Container(height: 200, color: theme.colorScheme.surfaceContainerHighest,
-                  child: Icon(Icons.fitness_center, size: 64, color: theme.colorScheme.primary))))),
-            const SizedBox(height: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (exercise.imageUrl != null) ...[
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    exercise.imageUrl!,
+                    height: 200,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => Container(
+                      height: 200,
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.fitness_center,
+                        size: 64,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            _buildSection(
+              theme,
+              l10n.get('area'),
+              l10n.bodyPartName(exercise.bodyPart),
+            ),
+            if (exercise.category != null)
+              _buildSection(
+                theme,
+                l10n.get('category'),
+                l10n.exerciseCategoryName(exercise.category!),
+              ),
+            if (exercise.displayTargetMuscle(isEn).isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildSection(
+                theme,
+                l10n.get('targetMuscle'),
+                exercise.displayTargetMuscle(isEn),
+              ),
+            ],
+            if (exercise.displayInstructions(isEn).isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildBlock(
+                theme,
+                l10n.get('instructions'),
+                exercise.displayInstructions(isEn),
+              ),
+            ],
+            if (exercise.displayMistakes(isEn).isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildBlock(
+                theme,
+                l10n.get('commonMistakes'),
+                exercise.displayMistakes(isEn),
+              ),
+            ],
           ],
-          _buildSection(theme, l10n.get('area'), l10n.bodyPartName(exercise.bodyPart)),
-          if (exercise.category != null) _buildSection(theme, l10n.get('category'), exercise.category!),
-          if (exercise.displayTargetMuscle(isEn).isNotEmpty) ...[const SizedBox(height: 12), _buildSection(theme, l10n.get('targetMuscle'), exercise.displayTargetMuscle(isEn))],
-          if (exercise.displayInstructions(isEn).isNotEmpty) ...[const SizedBox(height: 16), _buildBlock(theme, l10n.get('instructions'), exercise.displayInstructions(isEn))],
-          if (exercise.displayMistakes(isEn).isNotEmpty) ...[const SizedBox(height: 16), _buildBlock(theme, l10n.get('commonMistakes'), exercise.displayMistakes(isEn))],
-        ]),
+        ),
       ),
     );
   }
@@ -47,9 +97,7 @@ class ExerciseDetailScreen extends ConsumerWidget {
             style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
           ),
         ),
-        Expanded(
-          child: Text(value, style: theme.textTheme.bodyMedium),
-        ),
+        Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
       ],
     );
   }

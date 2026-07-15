@@ -23,6 +23,7 @@ final testExercises = [
     nameEn: 'Barbell Bench Press',
     bodyPart: '胸部',
     bodyPartEn: 'Chest',
+    category: 'Strength',
     targetMuscle: 'Chest',
     instructions: '1. Lie on bench\n2. Lower bar\n3. Push up',
     commonMistakes: 'Arching back',

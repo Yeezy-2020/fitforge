@@ -1,44 +1,43 @@
 # FitForge Module Map
 
-last_verified_commit: `71b38dfc3f8b`
-last_verified_date: `2026-07-09 UTC`
-
-This map describes current module responsibilities and complexity hot spots. Verify against live code before relying on it for implementation work.
+last_verified_commit: `18cb461`
+last_verified_date: `2026-07-13 UTC`
 
 ## Module Inventory
 
-| Module | Responsibility | Key files | Complexity | Boundary |
-|---|---|---|---|---|
-| App / Shell / Auth | App startup, Supabase initialization, GoRouter routing, login/onboarding, bottom navigation. | `lib/main.dart`, `lib/app.dart`, `lib/features/auth/`, `lib/features/home/home_shell.dart` | Medium | Coordinate entry/session/navigation; avoid business calculations here. |
-| Providers | Riverpod global state, caches, active program/date selection, profile/diet/workout lists. | `lib/providers/app_providers.dart`, `lib/providers/settings_providers.dart` | High | Connect UI to local/remote data; avoid adding more domain logic directly here. |
-| Data / Persistence | SecureStorage JSON persistence, user-scoped keys, exercise library, local queues. | `lib/data/repositories/app_database.dart`, `lib/data/repositories/exercise_library.dart` | High | Local persistence only; remote writes belong in service/sync layer. |
-| Sync / Remote | Supabase Auth/Profile/Food/Workout/Diet access and sync orchestration. | `lib/core/services/supabase_service.dart`, `lib/core/services/sync_service.dart` | Medium | Does not currently cover training-program remote sync. |
-| Workout | Calendar, workout day logging, templates, exercise detail, rest timer, workout UI. | `lib/features/workout/**`, `lib/data/models/workout_log.dart`, `lib/data/models/progression_rule.dart` | High | Screens should orchestrate UI; domain rules should move toward models/utils/services. |
-| Training Program | Program/day/exercise model, cycle scheduling, pause/end, deload, prescriptions, completion advancement. | `lib/data/models/training_program.dart`, `lib/core/utils/program_prescription_calculator.dart`, `lib/features/workout/screens/program_detail_screen.dart` | High | Keep rules in domain/model helpers; avoid embedding scheduling rules in widgets. |
-| Diet / Nutrition | Food logs, meal templates, nutrition-plan targets, macro calculations, diet-progress display. | `lib/features/diet/`, `lib/features/nutrition_plan/`, `lib/core/utils/nutrition_calculator.dart`, `lib/data/models/nutrition_plan.dart` | High | Diet records actual intake; nutrition plan computes targets and should remain explainable. |
-| Body / Settings / Subscription / i18n / Theme | Body measurements, profile/settings, local Pro unlock, localization, visual system. | `lib/features/body/`, `lib/features/settings/`, `lib/features/subscription/`, `lib/core/localization/l10n.dart`, `lib/core/theme/` | Low-Medium | Visible text should use L10n; Pro unlock is not production purchase verification. |
+| Module | Responsibility | Key files | Complexity / boundary |
+|---|---|---|---|
+| App / Auth / Routing | Startup, stable GoRouter, auth classification, session transitions, onboarding, cache/sync initialization. | `lib/app.dart`, `lib/features/auth/` | Keep session orchestration here; profile load failures must not masquerade as onboarding. |
+| Providers | Riverpod state, caches, user scopes, training/workout/profile adapters. | `lib/providers/app_providers.dart`, `settings_providers.dart` | High complexity; all async writes require captured user scope/owner. |
+| Local Persistence | User-scoped SecureStorage, v1 envelopes, mutation locks, sync outbox/recovery. | `lib/data/repositories/app_database.dart` | Largest hotspot; local persistence and sync bookkeeping share strict lock/order contracts. |
+| Sync / Remote | Supabase access, row codecs, feature flag, serialized sync orchestration, quarantine. | `supabase_service.dart`, `sync_service.dart`, `training_sync.dart`, `sync_row_codec.dart`, migration | Training sync exists but defaults off until real schema/RLS smoke. |
+| Training Domain | Programs/days/exercises, scheduling, pause/end, deload, prescriptions, editor transforms. | `training_program.dart`, `training_program_editor.dart`, prescription calculator | Domain helpers own invariants; screens orchestrate UI/provider calls. |
+| Workout UI | Calendar, day logging, templates, exercise detail, progression sheet, fixed save attempts. | `lib/features/workout/**`, `workout_log_builder.dart` | User-facing async paths must preserve scope identity and single-flight behavior. |
+| Diet / Nutrition | Intake logs, meal templates, macro targets, nutrition planning. | `lib/features/diet/`, `lib/features/nutrition_plan/` | Keep actual intake separate from explainable target calculation. |
+| Body / Settings / Subscription / i18n / Theme | Measurements, profile/settings, local Pro development state, localization, visuals. | matching feature folders, `l10n.dart`, theme | Visible copy uses `L10n`; local Pro is not a production entitlement. |
 
 ## Current Size Signals
 
-- Dart total in `lib`, `test`, and `integration_test`: about 18.3k lines.
-- `lib/features/workout`: about 5.6k lines.
-- `lib/features/diet` + `lib/features/nutrition_plan`: about 2.1k lines.
-- Static test declarations observed with `rg "testWidgets|test\\(" test integration_test -n | wc -l`: 209.
+- Dart in `lib`: 20,081 lines.
+- Dart in `lib`, `test`, and `integration_test`: 31,975 lines.
+- `lib/features/workout`: 6,154 lines.
+- Diet + nutrition-plan features: 2,145 lines.
+- Static `test`/`testWidgets` declarations: 401.
+- `app.dart`: 386 lines.
+- `app_database.dart`: 2,110 lines.
+- `app_providers.dart`: 1,201 lines.
+- `sync_service.dart`: 968 lines; `supabase_service.dart`: 553 lines.
 
-## Hot Spots
+## Screen Families And Domain Helpers
 
-- `lib/features/workout/screens/program_detail_screen.dart`: 2019 lines.
-- `lib/features/workout/screens/workout_day_screen.dart`: 1529 lines.
-- `lib/features/nutrition_plan/screens/nutrition_plan_screen.dart`: 1360 lines.
-- `lib/data/models/training_program.dart`: 1256 lines.
-- `lib/data/repositories/app_database.dart`: 861 lines.
-- `lib/providers/app_providers.dart`: 584 lines.
+- Program-detail family: 2,113 lines across coordinator 832, deload 289, overview 458, and exercise dialogs 534.
+- Workout-day family: 1,810 lines across coordinator 1,284, exercise card 243, and progression sheet 283.
+- `training_program_editor.dart`: 136 lines of day/deload transforms.
+- `workout_log_builder.dart`: 155 lines of validated save-plan construction.
 
-## Split Candidates
+## Hotspots / Next Splits
 
-- Split training-program edit UI into day, exercise, deload, activation, and action widgets.
-- Move training-program scheduling, pause, deload refresh, and prescription behavior toward focused domain helpers.
-- Split `app_providers.dart` by domain once Riverpod dependency boundaries are clearer.
-- Split `AppDatabase` into user-scoped repository slices or storage adapters before adding more local-only entities.
-- Keep Diet and Nutrition linked but avoid putting target-calculation behavior inside screens.
-
+- Split `AppDatabase` into storage envelope, training repository, workout repository, and sync journal only after activation contracts stabilize.
+- Split `app_providers.dart` by domain when dependency boundaries can remain explicit.
+- Continue moving rules from screen coordinators into pure helpers; keep part files for library-private UI composition.
+- Do not refactor these hotspots during sync activation unless required by a reproduced defect.

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/services/workout_log_builder.dart';
 import '../../../data/models/exercise.dart';
-import '../../../data/models/workout_log.dart';
 import '../../../data/models/progression_rule.dart';
 import '../../../data/models/training_program.dart';
 import '../../../data/repositories/app_database.dart';
@@ -16,7 +16,41 @@ import '../../../data/models/workout_template.dart';
 import '../../workout/screens/templates_screen.dart';
 import 'exercise_detail_screen.dart';
 
+part 'workout_day_exercise_card.dart';
+part 'workout_day_progression_sheet.dart';
+
 const _uuid = Uuid();
+
+class _WorkoutSaveAttempt {
+  final UserScope userScope;
+  final String userId;
+  final DateTime selectedDate;
+  final List<WorkoutEntryDraft> drafts;
+  final WorkoutSavePlan savePlan;
+  final WorkoutLogWriteStore writeStore;
+  final WorkoutLogRemoteWriter remoteWriter;
+  final TrainingProgramsNotifier programsNotifier;
+  final WorkoutCacheNotifier workoutCache;
+  final WorkoutLogCacheNotifier workoutLogCache;
+  int completedBundleCount = 0;
+  bool programAdvanceAttempted = false;
+  bool programAdvanced = false;
+  bool cachePublished = false;
+  final Set<String> completedRemoteLogIds = {};
+
+  _WorkoutSaveAttempt({
+    required this.userScope,
+    required this.userId,
+    required this.selectedDate,
+    required this.drafts,
+    required this.savePlan,
+    required this.writeStore,
+    required this.remoteWriter,
+    required this.programsNotifier,
+    required this.workoutCache,
+    required this.workoutLogCache,
+  });
+}
 
 class WorkoutDayScreen extends ConsumerStatefulWidget {
   final DateTime date;
@@ -28,24 +62,52 @@ class WorkoutDayScreen extends ConsumerStatefulWidget {
 
 class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
   String? _selectedBodyPart;
-  List<_PendingSet> _pendingSets = [];
+  List<WorkoutEntryDraft> _pendingSets = [];
   final _searchController = TextEditingController();
   String _searchQuery = '';
   final _customNameCtrl = TextEditingController();
   final _customSetsCtrl = TextEditingController(text: '3');
   final _customRepsCtrl = TextEditingController();
   final _customWeightCtrl = TextEditingController();
+  UserScope? _draftUserScope;
+  _WorkoutSaveAttempt? _saveAttempt;
+  bool _isSaving = false;
+  bool _isAdvancingRestDay = false;
 
-  void _saveAsTemplate() async {
+  bool get _draftLocked => _isSaving || _saveAttempt != null;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual<UserScope>(currentUserScopeProvider, (previous, next) {
+      if (previous == null || identical(previous, next) || !mounted) return;
+      setState(() {
+        _pendingSets = [];
+        _draftUserScope = null;
+        _saveAttempt = null;
+      });
+    });
+  }
+
+  Future<void> _saveAsTemplate() async {
+    if (_draftLocked) return;
     final l10n = ref.read(l10nProvider);
-    final nameCtrl = TextEditingController();
+    final userScope = ref.read(currentUserScopeProvider);
+    if (userScope.userId.isEmpty ||
+        _pendingSets.isEmpty ||
+        !identical(_draftUserScope, userScope)) {
+      return;
+    }
+    final drafts = List<WorkoutEntryDraft>.unmodifiable(_pendingSets);
+    final database = AppDatabase.instance;
+    var pendingName = '';
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.get('saveAsTemplate')),
         content: TextField(
-          controller: nameCtrl,
           decoration: InputDecoration(hintText: l10n.get('templateName')),
+          onChanged: (value) => pendingName = value,
         ),
         actions: [
           TextButton(
@@ -53,17 +115,18 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             child: Text(l10n.get('cancel')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
+            onPressed: () => Navigator.pop(ctx, pendingName.trim()),
             child: Text(l10n.get('save')),
           ),
         ],
       ),
     );
     if (name == null || name.isEmpty) return;
+    if (!_isCurrentUserScope(userScope)) return;
     final template = WorkoutTemplate(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
-      exercises: _pendingSets
+      exercises: drafts
           .map(
             (p) => TemplateExercise(
               exerciseId: p.exerciseId,
@@ -74,13 +137,12 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           )
           .toList(),
     );
-    final userId = ref.read(currentUserIdProvider);
-    await AppDatabase.instance.saveTemplate(userId, template);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.format('templateSaved', {'name': name}))),
-      );
-    }
+    await database.saveTemplate(userScope.userId, template);
+    if (!mounted) return;
+    if (!_isCurrentUserScope(userScope)) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.format('templateSaved', {'name': name}))),
+    );
   }
 
   @override
@@ -103,15 +165,21 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     String? programExerciseId,
   }) {
     final l10n = ref.read(l10nProvider);
+    final userScope = ref.read(currentUserScopeProvider);
+    if (userScope.userId.isEmpty || _draftLocked) return;
     if (reps <= 0) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.get('pleaseEnterValid'))));
       return;
     }
-    setState(
-      () => _pendingSets.add(
-        _PendingSet(
+    setState(() {
+      if (!identical(_draftUserScope, userScope)) {
+        _pendingSets = [];
+        _draftUserScope = userScope;
+      }
+      _pendingSets.add(
+        WorkoutEntryDraft(
           exerciseId: exerciseId,
           sets: sets,
           reps: reps,
@@ -120,8 +188,8 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           programDayId: programDayId,
           programExerciseId: programExerciseId,
         ),
-      ),
-    );
+      );
+    });
   }
 
   void _addProgramPrescription(
@@ -143,6 +211,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     List<WorkoutPrescription> prescriptions,
     L10n l10n,
   ) async {
+    if (_draftLocked) return;
+    final userScope = ref.read(currentUserScopeProvider);
+    if (userScope.userId.isEmpty) return;
     final recoveryCount = prescriptions
         .where((rx) => rx.shouldOfferRecoveryLoad)
         .length;
@@ -172,6 +243,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
       if (choice == null) return;
       useRecoveryLoads = choice;
     }
+    if (!_isCurrentUserScope(userScope) || _draftLocked) return;
     for (final rx in prescriptions) {
       _addProgramPrescription(
         rx,
@@ -181,6 +253,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
   }
 
   void _addCustomExercise() {
+    if (_draftLocked) return;
     final l10n = ref.read(l10nProvider);
     final name = _customNameCtrl.text.trim();
     final sets = int.tryParse(_customSetsCtrl.text) ?? 3;
@@ -212,104 +285,207 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
 
   bool get _selectedDateIsToday => _isSameDate(widget.date, DateTime.now());
 
+  bool _isCurrentUserScope(UserScope expectedScope) {
+    if (!mounted) return false;
+    return identical(ref.read(currentUserScopeProvider), expectedScope);
+  }
+
   Future<void> _advanceActiveProgram(L10n l10n) async {
-    await ref.read(trainingProgramsProvider.notifier).advanceDay();
-    ref.invalidate(workoutPrescriptionsForDateProvider(widget.date));
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.get('programAdvanced'))));
+    if (_isAdvancingRestDay) return;
+    final userScope = ref.read(currentUserScopeProvider);
+    if (userScope.userId.isEmpty) return;
+    final programsNotifier = ref.read(trainingProgramsProvider.notifier);
+    final date = widget.date;
+    setState(() => _isAdvancingRestDay = true);
+    try {
+      await programsNotifier.advanceDay(expectedUserId: userScope.userId);
+      if (!mounted) return;
+      if (!_isCurrentUserScope(userScope)) return;
+      ref.invalidate(workoutPrescriptionsForDateProvider(date));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.get('programAdvanced'))));
+    } catch (_) {
+      if (!mounted) return;
+      if (!_isCurrentUserScope(userScope)) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.get('failedToLoad'))));
+    } finally {
+      if (mounted) setState(() => _isAdvancingRestDay = false);
+    }
   }
 
   Future<void> _saveAll() async {
+    if (_isSaving || _pendingSets.isEmpty) return;
+    final userScope = ref.read(currentUserScopeProvider);
+    if (userScope.userId.isEmpty || !identical(_draftUserScope, userScope)) {
+      return;
+    }
     final l10n = ref.read(l10nProvider);
-    final userId = ref.read(currentUserIdProvider);
-    final savedLogs = <WorkoutLog>[];
-    final activeProgram = ref.read(activeTrainingProgramProvider);
-    final activeProgramDay = activeProgram?.isPausedOn(widget.date) == true
-        ? null
-        : activeProgram?.currentDay;
-    final savedCurrentProgramExerciseIds = <String>{};
-    for (final p in _pendingSets) {
-      final log = WorkoutLog(
-        id: _uuid.v4(),
-        userId: userId,
-        exerciseId: p.exerciseId,
-        date: widget.date,
-        sets: p.sets,
-        reps: p.reps,
-        weightKg: p.weight,
-        createdAt: DateTime.now(),
-      );
-      savedLogs.add(log);
-      await AppDatabase.instance.addWorkoutLog(userId, log);
-
-      // Save WorkoutSetLog records for program-derived items (local only)
-      final programId = p.programId;
-      final programDayId = p.programDayId;
-      final programExerciseId = p.programExerciseId;
-      if (programId != null &&
-          programDayId != null &&
-          programExerciseId != null) {
-        if (activeProgram != null &&
-            activeProgramDay != null &&
-            programId == activeProgram.id &&
-            programDayId == activeProgramDay.id) {
-          savedCurrentProgramExerciseIds.add(programExerciseId);
-        }
-        final setLogs = <WorkoutSetLog>[];
-        for (int i = 0; i < p.sets; i++) {
-          setLogs.add(
-            WorkoutSetLog(
-              id: _uuid.v4(),
-              workoutLogId: log.id,
-              programId: programId,
-              programExerciseId: programExerciseId,
-              setIndex: i,
-              reps: p.reps,
-              weightKg: p.weight,
-              completed: true,
-            ),
-          );
-        }
-        await AppDatabase.instance.saveWorkoutSetLogs(userId, setLogs);
-      }
-    }
-
-    // Program advance: only when every planned exercise is covered
-    String message = l10n.get('workoutSaved');
-    if (shouldAdvanceProgram(
-      currentDay: activeProgramDay,
-      savedProgramExerciseIds: savedCurrentProgramExerciseIds,
-      advanceMode: activeProgram?.advanceMode ?? AdvanceMode.manual,
-      selectedDateIsToday: _selectedDateIsToday,
-    )) {
-      await ref.read(trainingProgramsProvider.notifier).advanceDay();
-      message = '${l10n.get('workoutSaved')} · ${l10n.get('programAdvanced')}';
-    }
-
-    // Update cache IMMEDIATELY so calendar shows instant results
-    ref.read(workoutCacheProvider.notifier).addDate(widget.date);
-    ref.read(workoutLogCacheProvider.notifier).addLogs(widget.date, savedLogs);
-    // Push to Supabase in background (non-blocking)
-    for (final log in savedLogs) {
-      try {
-        await ref.read(supabaseProvider).addWorkoutLog(log);
-      } catch (_) {
-        await AppDatabase.instance.addUnsyncedWorkout(userId, log);
-      }
-    }
-    ref.invalidate(workoutLogsForDateProvider);
-    if (mounted) {
-      setState(() => _pendingSets = []);
+    setState(() => _isSaving = true);
+    try {
+      await _saveAllOnce(userScope, l10n);
+    } catch (_) {
+      if (!mounted) return;
+      if (!_isCurrentUserScope(userScope)) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      context.pop();
+      ).showSnackBar(SnackBar(content: Text(l10n.get('failedToLoad'))));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  void _confirmDeletePending(int idx) {
+  Future<void> _saveAllOnce(UserScope userScope, L10n l10n) async {
+    final userId = userScope.userId;
+    var attempt = _saveAttempt;
+    if (attempt != null && !identical(attempt.userScope, userScope)) return;
+
+    if (attempt == null) {
+      final selectedDate = widget.date;
+      final selectedDateIsToday = _selectedDateIsToday;
+      final drafts = List<WorkoutEntryDraft>.unmodifiable(_pendingSets);
+      final activeProgramFuture = ref.read(
+        activeTrainingProgramProvider.future,
+      );
+      final writeStore = ref.read(workoutLogWriteStoreProvider);
+      final remoteWriter = ref.read(workoutLogRemoteWriterProvider);
+      final programsNotifier = ref.read(trainingProgramsProvider.notifier);
+      final workoutCache = ref.read(workoutCacheProvider.notifier);
+      final workoutLogCache = ref.read(workoutLogCacheProvider.notifier);
+      final activeProgram = await activeProgramFuture;
+      if (!_isCurrentUserScope(userScope) ||
+          !identical(_draftUserScope, userScope)) {
+        return;
+      }
+      final activeProgramDay = activeProgram?.isPausedOn(selectedDate) == true
+          ? null
+          : activeProgram?.currentDay;
+      final savePlan = buildWorkoutSavePlan(
+        drafts: drafts,
+        userId: userId,
+        workoutDate: selectedDate,
+        createdAt: DateTime.now(),
+        idFactory: _uuid.v4,
+        activeProgram: activeProgram,
+        activeProgramDay: activeProgramDay,
+        selectedDateIsToday: selectedDateIsToday,
+      );
+      attempt = _WorkoutSaveAttempt(
+        userScope: userScope,
+        userId: userId,
+        selectedDate: selectedDate,
+        drafts: drafts,
+        savePlan: savePlan,
+        writeStore: writeStore,
+        remoteWriter: remoteWriter,
+        programsNotifier: programsNotifier,
+        workoutCache: workoutCache,
+        workoutLogCache: workoutLogCache,
+      );
+      _saveAttempt = attempt;
+    }
+
+    for (
+      var index = attempt.completedBundleCount;
+      index < attempt.savePlan.bundles.length;
+      index += 1
+    ) {
+      final bundle = attempt.savePlan.bundles[index];
+      await attempt.writeStore.addWorkoutLog(userId, bundle.workoutLog);
+      if (bundle.setLogs.isNotEmpty) {
+        await attempt.writeStore.saveWorkoutSetLogs(userId, bundle.setLogs);
+      }
+      attempt.completedBundleCount = index + 1;
+    }
+    if (!_isCurrentUserScope(userScope)) return;
+
+    String message = l10n.get('workoutSaved');
+    if (attempt.savePlan.shouldAdvanceProgram &&
+        !attempt.programAdvanceAttempted) {
+      if (!_isCurrentUserScope(userScope)) return;
+      attempt.programAdvanceAttempted = true;
+      try {
+        await attempt.programsNotifier.advanceDay(expectedUserId: userId);
+        attempt.programAdvanced = true;
+      } catch (_) {
+        // The mutation may already have committed. Never issue it twice.
+      }
+      if (!_isCurrentUserScope(userScope)) return;
+    }
+    if (attempt.programAdvanced) {
+      message = '${l10n.get('workoutSaved')} · ${l10n.get('programAdvanced')}';
+    }
+
+    if (!attempt.cachePublished) {
+      if (!_isCurrentUserScope(userScope)) return;
+      attempt.cachePublished = true;
+      attempt.workoutCache.addDate(attempt.selectedDate);
+      attempt.workoutLogCache.addLogs(
+        attempt.selectedDate,
+        attempt.savePlan.workoutLogs,
+      );
+    }
+
+    for (final log in attempt.savePlan.workoutLogs) {
+      if (attempt.completedRemoteLogIds.contains(log.id)) continue;
+      if (!_isCurrentUserScope(userScope)) return;
+      try {
+        await attempt.remoteWriter.addWorkoutLog(log, expectedUserId: userId);
+      } catch (_) {
+        if (!_isCurrentUserScope(userScope)) return;
+        try {
+          await attempt.writeStore.addUnsyncedWorkout(userId, log);
+        } catch (_) {
+          // Local workout success is final even if sync bookkeeping fails.
+        }
+      }
+      attempt.completedRemoteLogIds.add(log.id);
+      if (!_isCurrentUserScope(userScope)) return;
+    }
+
+    if (!mounted) return;
+    if (!_isCurrentUserScope(userScope)) return;
+    if (!identical(_saveAttempt, attempt) ||
+        !identical(_draftUserScope, userScope)) {
+      return;
+    }
+    ref.invalidate(workoutLogsForDateProvider);
+    setState(() {
+      _pendingSets = [];
+      _draftUserScope = null;
+      _saveAttempt = null;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    context.pop();
+  }
+
+  bool _matchesPendingDraft(
+    UserScope userScope,
+    int idx,
+    WorkoutEntryDraft expectedDraft,
+  ) {
+    return _isCurrentUserScope(userScope) &&
+        identical(_draftUserScope, userScope) &&
+        idx >= 0 &&
+        idx < _pendingSets.length &&
+        identical(_pendingSets[idx], expectedDraft);
+  }
+
+  void _confirmDeletePending(
+    int idx, {
+    UserScope? expectedScope,
+    WorkoutEntryDraft? expectedDraft,
+  }) {
+    if (_draftLocked) return;
+    final UserScope userScope =
+        expectedScope ?? ref.read(currentUserScopeProvider);
+    if (idx < 0 || idx >= _pendingSets.length) return;
+    final draft = expectedDraft ?? _pendingSets[idx];
+    if (!_matchesPendingDraft(userScope, idx, draft)) return;
     final l10n = ref.read(l10nProvider);
     showDialog(
       context: context,
@@ -324,7 +500,15 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              setState(() => _pendingSets.removeAt(idx));
+              if (_draftLocked ||
+                  !_matchesPendingDraft(userScope, idx, draft)) {
+                Navigator.pop(ctx);
+                return;
+              }
+              setState(() {
+                _pendingSets.removeAt(idx);
+                if (_pendingSets.isEmpty) _draftUserScope = null;
+              });
               Navigator.pop(ctx);
             },
             child: Text(l10n.get('delete')),
@@ -334,13 +518,20 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     );
   }
 
-  void _editPending(int idx, _PendingSet p, L10n l10n, WeightUnit trainUnit) {
-    final setsCtrl = TextEditingController(text: p.sets.toString());
-    final repsCtrl = TextEditingController(text: p.reps.toString());
-    final weightCtrl = TextEditingController(
-      text: (trainUnit == WeightUnit.lb ? (p.weight * kgToLb) : p.weight)
-          .toStringAsFixed(1),
-    );
+  void _editPending(
+    int idx,
+    WorkoutEntryDraft p,
+    L10n l10n,
+    WeightUnit trainUnit,
+  ) {
+    if (_draftLocked) return;
+    final userScope = ref.read(currentUserScopeProvider);
+    if (!_matchesPendingDraft(userScope, idx, p)) return;
+    var setsText = p.sets.toString();
+    var repsText = p.reps.toString();
+    var weightText =
+        (trainUnit == WeightUnit.lb ? (p.weight * kgToLb) : p.weight)
+            .toStringAsFixed(1);
     final unitLabel = trainUnit == WeightUnit.kg ? 'kg' : 'lb';
     final exercises = ref.read(exerciseListProvider).valueOrNull ?? [];
     final exName =
@@ -357,38 +548,41 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: setsCtrl,
+                  child: TextFormField(
+                    initialValue: setsText,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     decoration: InputDecoration(
                       labelText: l10n.get('sets'),
                       isDense: true,
                     ),
+                    onChanged: (value) => setsText = value,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
-                    controller: repsCtrl,
+                  child: TextFormField(
+                    initialValue: repsText,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     decoration: InputDecoration(
                       labelText: l10n.get('reps'),
                       isDense: true,
                     ),
+                    onChanged: (value) => repsText = value,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
-                    controller: weightCtrl,
+                  child: TextFormField(
+                    initialValue: weightText,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     decoration: InputDecoration(
                       labelText: unitLabel,
                       isDense: true,
                     ),
+                    onChanged: (value) => weightText = value,
                   ),
                 ),
               ],
@@ -403,7 +597,11 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           TextButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              _confirmDeletePending(idx);
+              _confirmDeletePending(
+                idx,
+                expectedScope: userScope,
+                expectedDraft: p,
+              );
             },
             icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
             label: Text(
@@ -414,12 +612,16 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           const SizedBox(width: 8),
           FilledButton(
             onPressed: () {
-              final newSets = int.tryParse(setsCtrl.text) ?? p.sets;
-              final newReps = int.tryParse(repsCtrl.text) ?? p.reps;
-              double newWeight = double.tryParse(weightCtrl.text) ?? p.weight;
+              if (_draftLocked || !_matchesPendingDraft(userScope, idx, p)) {
+                Navigator.pop(ctx);
+                return;
+              }
+              final newSets = int.tryParse(setsText) ?? p.sets;
+              final newReps = int.tryParse(repsText) ?? p.reps;
+              double newWeight = double.tryParse(weightText) ?? p.weight;
               if (trainUnit == WeightUnit.lb) newWeight = newWeight / kgToLb;
               setState(() {
-                _pendingSets[idx] = _PendingSet(
+                _pendingSets[idx] = WorkoutEntryDraft(
                   exerciseId: p.exerciseId,
                   sets: newSets.clamp(1, 999),
                   reps: newReps.clamp(1, 9999),
@@ -446,14 +648,24 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
     final trainUnit = ref.watch(trainingWeightUnitProvider);
     final exercises = ref.watch(exerciseListProvider).valueOrNull ?? [];
     final l10n2 = ref.watch(l10nProvider);
-    final activeProgram = ref.watch(
+    final activeProgramAsync = ref.watch(
       activeTrainingProgramForDateProvider(widget.date),
     );
-    final programPrescriptions =
-        ref
-            .watch(workoutPrescriptionsForDateProvider(widget.date))
-            .valueOrNull ??
-        [];
+    final programPrescriptionsAsync = ref.watch(
+      workoutPrescriptionsForDateProvider(widget.date),
+    );
+    final activeProgram = activeProgramAsync.valueOrNull;
+    final programPrescriptions = programPrescriptionsAsync.valueOrNull ?? [];
+    final programLoadError = switch ((
+      activeProgramAsync,
+      programPrescriptionsAsync,
+    )) {
+      (AsyncError(:final error), _) => error,
+      (_, AsyncError(:final error)) => error,
+      _ => null,
+    };
+    final programDataLoading =
+        activeProgramAsync.isLoading || programPrescriptionsAsync.isLoading;
     String exName(String id) {
       final ex = exercises.where((e) => e.id == id).firstOrNull;
       if (ex == null) return id;
@@ -476,40 +688,77 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
         actions: [
           if (_pendingSets.isNotEmpty)
             TextButton.icon(
-              onPressed: _saveAll,
-              icon: const Icon(Icons.save),
+              onPressed: _isSaving ? null : _saveAll,
+              icon: _isSaving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save),
               label: Text('${l10n.get('save')} (${_pendingSets.length})'),
             ),
           IconButton(
             icon: const Icon(Icons.bookmark_border),
             tooltip: l10n.get('templates'),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                instantPageRoute(const TemplatesScreen()),
-              );
-              if (result != null && result is WorkoutTemplate) {
-                for (final ex in result.exercises) {
-                  _addToPending(
-                    ex.exerciseId,
-                    ex.defaultSets,
-                    ex.defaultReps,
-                    ex.defaultWeight,
-                  );
-                }
-              }
-            },
+            onPressed: _draftLocked
+                ? null
+                : () async {
+                    final userScope = ref.read(currentUserScopeProvider);
+                    if (userScope.userId.isEmpty) return;
+                    final result = await Navigator.push(
+                      context,
+                      instantPageRoute(const TemplatesScreen()),
+                    );
+                    if (!_isCurrentUserScope(userScope)) return;
+                    if (result != null && result is WorkoutTemplate) {
+                      for (final ex in result.exercises) {
+                        _addToPending(
+                          ex.exerciseId,
+                          ex.defaultSets,
+                          ex.defaultReps,
+                          ex.defaultWeight,
+                        );
+                      }
+                    }
+                  },
           ),
           if (_pendingSets.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.bookmark_add),
               tooltip: l10n.get('saveAsTemplate'),
-              onPressed: _saveAsTemplate,
+              onPressed: _draftLocked ? null : _saveAsTemplate,
             ),
         ],
       ),
       body: Column(
         children: [
+          if (programLoadError != null)
+            Material(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: ListTile(
+                dense: true,
+                leading: Icon(
+                  Icons.error_outline,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+                title: Text(l10n.get('failedToLoad')),
+                trailing: IconButton(
+                  onPressed: () {
+                    ref.invalidate(trainingProgramsProvider);
+                    ref.invalidate(
+                      activeTrainingProgramForDateProvider(widget.date),
+                    );
+                    ref.invalidate(
+                      workoutPrescriptionsForDateProvider(widget.date),
+                    );
+                  },
+                  tooltip: l10n.get('failedToLoad'),
+                  icon: const Icon(Icons.refresh),
+                ),
+              ),
+            )
+          else if (programDataLoading)
+            const LinearProgressIndicator(minHeight: 2),
           if (_pendingSets.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(10),
@@ -528,7 +777,12 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                       ),
                       const Spacer(),
                       TextButton(
-                        onPressed: () => setState(() => _pendingSets = []),
+                        onPressed: _draftLocked
+                            ? null
+                            : () => setState(() {
+                                _pendingSets = [];
+                                _draftUserScope = null;
+                              }),
                         child: Text(
                           l10n.get('clear'),
                           style: const TextStyle(fontSize: 12),
@@ -544,7 +798,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                       final idx = e.key;
                       final p = e.value;
                       return GestureDetector(
-                        onTap: () => _editPending(idx, p, l10n, trainUnit),
+                        onTap: _draftLocked
+                            ? null
+                            : () => _editPending(idx, p, l10n, trainUnit),
                         child: Container(
                           padding: const EdgeInsets.only(
                             left: 10,
@@ -566,7 +822,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                                 style: const TextStyle(fontSize: 11),
                               ),
                               GestureDetector(
-                                onTap: () => _confirmDeletePending(idx),
+                                onTap: _draftLocked
+                                    ? null
+                                    : () => _confirmDeletePending(idx),
                                 child: const Padding(
                                   padding: EdgeInsets.all(4),
                                   child: Icon(Icons.close, size: 14),
@@ -671,7 +929,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                onPressed: () => _advanceActiveProgram(l10n),
+                onPressed: _isAdvancingRestDay
+                    ? null
+                    : () => _advanceActiveProgram(l10n),
                 child: Text(
                   l10n.get('completeRestDay'),
                   style: const TextStyle(fontSize: 11),
@@ -752,7 +1012,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        onPressed: () => _addProgramPrescription(rx),
+                        onPressed: _draftLocked
+                            ? null
+                            : () => _addProgramPrescription(rx),
                         child: Text(
                           l10n.get('add'),
                           style: const TextStyle(fontSize: 11),
@@ -800,10 +1062,12 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              onPressed: () => _addProgramPrescription(
-                                rx,
-                                useLastLogged: true,
-                              ),
+                              onPressed: _draftLocked
+                                  ? null
+                                  : () => _addProgramPrescription(
+                                      rx,
+                                      useLastLogged: true,
+                                    ),
                               child: Text(
                                 l10n.get('useLastLoad'),
                                 style: const TextStyle(fontSize: 11),
@@ -834,8 +1098,9 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
                     l10n.get('addAll'),
                     style: const TextStyle(fontSize: 11),
                   ),
-                  onPressed: () =>
-                      _addAllProgramPrescriptions(prescriptions, l10n),
+                  onPressed: _draftLocked
+                      ? null
+                      : () => _addAllProgramPrescriptions(prescriptions, l10n),
                 ),
               ],
             ),
@@ -982,7 +1247,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
         ),
         const SizedBox(height: 16),
         FilledButton.icon(
-          onPressed: _addCustomExercise,
+          onPressed: _draftLocked ? null : _addCustomExercise,
           icon: const Icon(Icons.add, size: 18),
           label: Text(l10n.get('addToWorkout')),
         ),
@@ -1008,6 +1273,7 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
               trainUnit: trainUnit,
               date: widget.date,
               showProgressionControls: showExerciseProgression,
+              addEnabled: !_draftLocked,
               onAdd: (id, sets, reps, weight) =>
                   _addToPending(id, sets, reps, weight),
             ),
@@ -1015,515 +1281,4 @@ class _WorkoutDayScreenState extends ConsumerState<WorkoutDayScreen> {
           .toList(),
     );
   }
-}
-
-class _ExerciseCard extends ConsumerStatefulWidget {
-  final Exercise exercise;
-  final L10n l10n;
-  final WeightUnit trainUnit;
-  final DateTime date;
-  final bool showProgressionControls;
-  final void Function(String exerciseId, int sets, int reps, double weight)
-  onAdd;
-  const _ExerciseCard({
-    super.key,
-    required this.exercise,
-    required this.l10n,
-    required this.trainUnit,
-    required this.date,
-    required this.showProgressionControls,
-    required this.onAdd,
-  });
-
-  @override
-  ConsumerState<_ExerciseCard> createState() => _ExerciseCardState();
-}
-
-class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
-  late TextEditingController _setsCtrl, _repsCtrl, _weightCtrl;
-  bool _applying = false;
-  bool _userEdited = false;
-  String? _appliedKey;
-
-  @override
-  void initState() {
-    super.initState();
-    _setsCtrl = TextEditingController();
-    _repsCtrl = TextEditingController();
-    _weightCtrl = TextEditingController();
-    for (final c in [_setsCtrl, _repsCtrl, _weightCtrl]) {
-      c.addListener(() {
-        if (!_applying) _userEdited = true;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _setsCtrl.dispose();
-    _repsCtrl.dispose();
-    _weightCtrl.dispose();
-    super.dispose();
-  }
-
-  String _suggestionKey(ProgressionSuggestion s) =>
-      '${s.sets}-${s.reps}-${s.weightKg}';
-
-  void _applySuggestion(ProgressionSuggestion s) {
-    _applying = true;
-    _setsCtrl.text = s.sets.toString();
-    _repsCtrl.text = s.reps.toString();
-    final w = widget.trainUnit == WeightUnit.lb
-        ? s.weightKg * kgToLb
-        : s.weightKg;
-    _weightCtrl.text = w.toStringAsFixed(1);
-    _applying = false;
-    _appliedKey = _suggestionKey(s);
-  }
-
-  void _clearForNext() {
-    _applying = true;
-    _setsCtrl.clear();
-    _repsCtrl.clear();
-    _weightCtrl.clear();
-    _applying = false;
-    setState(() {
-      _userEdited = false;
-      _appliedKey = null;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final unitLabel = widget.trainUnit == WeightUnit.kg ? 'kg' : 'lb';
-    final rule = widget.showProgressionControls
-        ? ref.watch(progressionRuleForExerciseProvider(widget.exercise.id))
-        : null;
-    final suggestion = widget.showProgressionControls
-        ? ref.watch(
-            progressionSuggestionProvider((
-              exerciseId: widget.exercise.id,
-              before: widget.date,
-            )),
-          )
-        : null;
-
-    if (suggestion != null &&
-        !_userEdited &&
-        _appliedKey != _suggestionKey(suggestion)) {
-      final s = suggestion;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_userEdited || _appliedKey == _suggestionKey(s)) return;
-        setState(() => _applySuggestion(s));
-      });
-    }
-
-    final ruleActive = rule != null && rule.enabled;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).push(
-          instantPageRoute(ExerciseDetailScreen(exercise: widget.exercise)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.l10n.exerciseName(
-                        widget.exercise.id,
-                        widget.exercise.name,
-                      ),
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ),
-                  if (widget.showProgressionControls)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      iconSize: 18,
-                      tooltip: widget.l10n.get('progressiveOverload'),
-                      icon: Icon(
-                        Icons.trending_up,
-                        size: 18,
-                        color: ruleActive
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).disabledColor,
-                      ),
-                      onPressed: () => showProgressionRuleSheet(
-                        context,
-                        ref,
-                        exercise: widget.exercise,
-                        l10n: widget.l10n,
-                      ),
-                    ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.info_outline, size: 16),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  _numField(
-                    controller: _setsCtrl,
-                    label: widget.l10n.get('sets'),
-                    width: 64,
-                  ),
-                  const SizedBox(width: 6),
-                  _numField(
-                    controller: _repsCtrl,
-                    label: widget.l10n.get('reps'),
-                    width: 86,
-                  ),
-                  const SizedBox(width: 6),
-                  _numField(
-                    controller: _weightCtrl,
-                    label: unitLabel,
-                    width: 72,
-                  ),
-                  const Spacer(),
-                  FilledButton.tonalIcon(
-                    onPressed: () {
-                      final sets =
-                          int.tryParse(_setsCtrl.text) ??
-                          (suggestion?.sets ?? 3);
-                      final reps = int.tryParse(_repsCtrl.text) ?? 0;
-                      double w = double.tryParse(_weightCtrl.text) ?? 0;
-                      if (widget.trainUnit == WeightUnit.lb) w = w / kgToLb;
-                      widget.onAdd(widget.exercise.id, sets, reps, w);
-                      _clearForNext();
-                    },
-                    icon: const Icon(Icons.add, size: 16),
-                    label: Text(
-                      widget.l10n.get('add'),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-              if (ruleActive && suggestion != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '${widget.l10n.get('suggested')}: '
-                    '${widget.l10n.format(suggestion.reasonKey, suggestion.reasonParams)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _numField({
-    required TextEditingController controller,
-    required String label,
-    required double width,
-  }) {
-    return SizedBox(
-      width: width,
-      child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 8,
-            horizontal: 4,
-          ),
-        ),
-        style: const TextStyle(fontSize: 13),
-      ),
-    );
-  }
-}
-
-Future<void> showProgressionRuleSheet(
-  BuildContext context,
-  WidgetRef ref, {
-  required Exercise exercise,
-  required L10n l10n,
-}) async {
-  final userId = ref.read(currentUserIdProvider);
-  final existing = ref.read(progressionRuleForExerciseProvider(exercise.id));
-
-  var type = existing?.type ?? ProgressionType.fixedWeight;
-  var enabled = existing?.enabled ?? true;
-  var onlyIfCompleted = existing?.onlyIfCompleted ?? true;
-  final incrementCtrl = TextEditingController(
-    text: (existing?.increment ?? 2.5).toString(),
-  );
-  final targetSetsCtrl = TextEditingController(
-    text: (existing?.targetSets ?? 3).toString(),
-  );
-  final targetRepsCtrl = TextEditingController(
-    text: (existing?.targetReps ?? 8).toString(),
-  );
-  final minRepsCtrl = TextEditingController(
-    text: (existing?.minReps ?? 8).toString(),
-  );
-  final maxRepsCtrl = TextEditingController(
-    text: (existing?.maxReps ?? 12).toString(),
-  );
-  final defWeightCtrl = TextEditingController(
-    text: existing?.defaultWeightKg?.toString() ?? '',
-  );
-  final defSetsCtrl = TextEditingController(
-    text: existing?.defaultSets?.toString() ?? '',
-  );
-  final defRepsCtrl = TextEditingController(
-    text: existing?.defaultReps?.toString() ?? '',
-  );
-
-  String typeLabel(ProgressionType t) {
-    switch (t) {
-      case ProgressionType.fixedWeight:
-        return l10n.get('typeFixedWeight');
-      case ProgressionType.percentWeight:
-        return l10n.get('typePercentWeight');
-      case ProgressionType.reps:
-        return l10n.get('typeReps');
-      case ProgressionType.doubleProgression:
-        return l10n.get('typeDoubleProgression');
-    }
-  }
-
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (ctx) {
-      return StatefulBuilder(
-        builder: (ctx, setSheet) {
-          Widget numField(TextEditingController c, String label) => Expanded(
-            child: TextField(
-              controller: c,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(labelText: label, isDense: true),
-            ),
-          );
-
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.trending_up, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${l10n.get('progressiveOverload')} · '
-                          '${l10n.exerciseName(exercise.id, exercise.name)}',
-                          style: Theme.of(ctx).textTheme.titleMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.get('enabled')),
-                    value: enabled,
-                    onChanged: (v) => setSheet(() => enabled = v),
-                  ),
-                  DropdownButtonFormField<ProgressionType>(
-                    initialValue: type,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: l10n.get('progressionType'),
-                      isDense: true,
-                    ),
-                    items: ProgressionType.values
-                        .map(
-                          (t) => DropdownMenuItem(
-                            value: t,
-                            child: Text(typeLabel(t)),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setSheet(() => type = v ?? type),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [numField(incrementCtrl, l10n.get('increment'))],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      numField(targetSetsCtrl, l10n.get('targetSets')),
-                      const SizedBox(width: 8),
-                      numField(targetRepsCtrl, l10n.get('targetReps')),
-                    ],
-                  ),
-                  if (type == ProgressionType.doubleProgression) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        numField(minRepsCtrl, l10n.get('minReps')),
-                        const SizedBox(width: 8),
-                        numField(maxRepsCtrl, l10n.get('maxReps')),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      numField(
-                        defWeightCtrl,
-                        '${l10n.get('defaultWeight')} (kg)',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      numField(defSetsCtrl, l10n.get('defaultSets')),
-                      const SizedBox(width: 8),
-                      numField(defRepsCtrl, l10n.get('defaultReps')),
-                    ],
-                  ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(l10n.get('onlyIfCompleted')),
-                    value: onlyIfCompleted,
-                    onChanged: (v) =>
-                        setSheet(() => onlyIfCompleted = v ?? true),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (existing != null)
-                        TextButton.icon(
-                          onPressed: () async {
-                            await ref
-                                .read(progressionRulesProvider.notifier)
-                                .delete(exercise.id);
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.get('ruleDeleted')),
-                                ),
-                              );
-                            }
-                          },
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            size: 18,
-                            color: Colors.red,
-                          ),
-                          label: Text(
-                            l10n.get('delete'),
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text(l10n.get('cancel')),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () async {
-                          final rule = ProgressionRule(
-                            id:
-                                existing?.id ??
-                                DateTime.now().millisecondsSinceEpoch
-                                    .toString(),
-                            userId: userId,
-                            exerciseId: exercise.id,
-                            type: type,
-                            enabled: enabled,
-                            increment:
-                                double.tryParse(incrementCtrl.text) ?? 2.5,
-                            targetSets: int.tryParse(targetSetsCtrl.text) ?? 3,
-                            targetReps: int.tryParse(targetRepsCtrl.text) ?? 8,
-                            minReps: type == ProgressionType.doubleProgression
-                                ? int.tryParse(minRepsCtrl.text)
-                                : existing?.minReps,
-                            maxReps: type == ProgressionType.doubleProgression
-                                ? int.tryParse(maxRepsCtrl.text)
-                                : existing?.maxReps,
-                            defaultWeightKg: double.tryParse(
-                              defWeightCtrl.text,
-                            ),
-                            defaultSets: int.tryParse(defSetsCtrl.text),
-                            defaultReps: int.tryParse(defRepsCtrl.text),
-                            onlyIfCompleted: onlyIfCompleted,
-                          );
-                          await ref
-                              .read(progressionRulesProvider.notifier)
-                              .save(rule);
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(l10n.get('ruleSaved'))),
-                            );
-                          }
-                        },
-                        child: Text(l10n.get('save')),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  incrementCtrl.dispose();
-  targetSetsCtrl.dispose();
-  targetRepsCtrl.dispose();
-  minRepsCtrl.dispose();
-  maxRepsCtrl.dispose();
-  defWeightCtrl.dispose();
-  defSetsCtrl.dispose();
-  defRepsCtrl.dispose();
-}
-
-class _PendingSet {
-  final String exerciseId;
-  final int sets, reps;
-  final double weight;
-  final String? programId;
-  final String? programDayId;
-  final String? programExerciseId;
-  _PendingSet({
-    required this.exerciseId,
-    required this.sets,
-    required this.reps,
-    required this.weight,
-    this.programId,
-    this.programDayId,
-    this.programExerciseId,
-  });
 }

@@ -26,7 +26,7 @@ jobs:
           channel: stable
 
       - run: flutter pub get
-      - run: flutter test
+      - run: bash scripts/pre_push.sh
       - run: flutter build web --release --base-href /fitforge/
 
       - uses: actions/configure-pages@v4

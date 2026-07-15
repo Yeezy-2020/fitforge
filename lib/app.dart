@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'data/models/user_profile.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/home/home_shell.dart';
@@ -25,27 +26,135 @@ Page<void> _instantPage(GoRouterState state, Widget child) {
   return NoTransitionPage<void>(key: state.pageKey, child: child);
 }
 
-final _routerProvider = Provider<GoRouter>((ref) {
-  final userId = ref.watch(currentUserIdProvider);
-  return GoRouter(
-    initialLocation: userId.isEmpty ? '/login' : '/home',
-    redirect: (context, state) {
-      final location = state.matchedLocation;
-      final isLogin = location == '/login';
-      final isOnboarding = location == '/onboarding';
+const _loginLocation = '/login';
+const _authLoadingLocation = '/auth-loading';
+const _authErrorLocation = '/auth-error';
+const _onboardingLocation = '/onboarding';
+const _homeLocation = '/home';
 
-      if (userId.isEmpty && !isLogin) return '/login';
-      if (userId.isNotEmpty && isLogin) return '/home';
-      if (userId.isEmpty && isOnboarding) return '/login';
-      return null;
+final authRoutingProfileProvider = Provider<AsyncValue<UserProfile?>>((ref) {
+  ref.watch(currentUserIdProvider);
+  return ref.watch(userProfileProvider);
+});
+
+enum AuthRouteCategory { loggedOut, loading, error, onboarding, authenticated }
+
+AuthRouteCategory authRouteCategory({
+  required String userId,
+  required AsyncValue<UserProfile?> profileState,
+}) {
+  if (userId.isEmpty) return AuthRouteCategory.loggedOut;
+  final profile = profileState.valueOrNull;
+  if (profile?.id == userId) return AuthRouteCategory.authenticated;
+  if (profileState.isLoading) return AuthRouteCategory.loading;
+  if (profileState.hasError) return AuthRouteCategory.error;
+  if (profile != null) return AuthRouteCategory.error;
+  return AuthRouteCategory.onboarding;
+}
+
+final authRouteCategoryProvider = Provider<AuthRouteCategory>((ref) {
+  return authRouteCategory(
+    userId: ref.watch(currentUserIdProvider),
+    profileState: ref.watch(authRoutingProfileProvider),
+  );
+});
+
+String _initialLocationForCategory(AuthRouteCategory category) {
+  return switch (category) {
+    AuthRouteCategory.loggedOut => _loginLocation,
+    AuthRouteCategory.loading => _authLoadingLocation,
+    AuthRouteCategory.error => _authErrorLocation,
+    AuthRouteCategory.onboarding => _onboardingLocation,
+    AuthRouteCategory.authenticated => _homeLocation,
+  };
+}
+
+String? _routeRedirectForCategory({
+  required AuthRouteCategory category,
+  required String location,
+}) {
+  return switch (category) {
+    AuthRouteCategory.loggedOut =>
+      location == _loginLocation ? null : _loginLocation,
+    AuthRouteCategory.loading =>
+      location == _authLoadingLocation ? null : _authLoadingLocation,
+    AuthRouteCategory.error =>
+      location == _authErrorLocation ? null : _authErrorLocation,
+    AuthRouteCategory.onboarding =>
+      location == _onboardingLocation ? null : _onboardingLocation,
+    AuthRouteCategory.authenticated =>
+      location == _loginLocation ||
+              location == _authLoadingLocation ||
+              location == _authErrorLocation ||
+              location == _onboardingLocation
+          ? _homeLocation
+          : null,
+  };
+}
+
+String authInitialLocation({
+  required String userId,
+  required AsyncValue<UserProfile?> profileState,
+}) {
+  return _initialLocationForCategory(
+    authRouteCategory(userId: userId, profileState: profileState),
+  );
+}
+
+String? authRouteRedirect({
+  required String userId,
+  required AsyncValue<UserProfile?> profileState,
+  required String location,
+}) {
+  return _routeRedirectForCategory(
+    category: authRouteCategory(userId: userId, profileState: profileState),
+    location: location,
+  );
+}
+
+final _authRouteRefreshProvider = Provider<ValueNotifier<AuthRouteCategory>>((
+  ref,
+) {
+  final notifier = ValueNotifier(ref.read(authRouteCategoryProvider));
+  ref.listen<AuthRouteCategory>(authRouteCategoryProvider, (previous, next) {
+    notifier.value = next;
+  });
+  ref.onDispose(notifier.dispose);
+  return notifier;
+});
+
+final fitForgeRouterProvider = Provider<GoRouter>((ref) {
+  final authRouteRefresh = ref.watch(_authRouteRefreshProvider);
+  final router = GoRouter(
+    initialLocation: _initialLocationForCategory(authRouteRefresh.value),
+    refreshListenable: authRouteRefresh,
+    redirect: (context, state) {
+      return _routeRedirectForCategory(
+        category: authRouteRefresh.value,
+        location: state.matchedLocation,
+      );
     },
     routes: [
       GoRoute(
-        path: '/login',
+        path: _loginLocation,
         pageBuilder: (c, s) => _instantPage(s, const LoginScreen()),
       ),
       GoRoute(
-        path: '/onboarding',
+        path: _authLoadingLocation,
+        pageBuilder: (c, s) => _instantPage(
+          s,
+          const Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: _authErrorLocation,
+        pageBuilder: (c, s) => _instantPage(s, const _ProfileLoadErrorScreen()),
+      ),
+      GoRoute(
+        path: _onboardingLocation,
         pageBuilder: (c, s) => _instantPage(s, const OnboardingScreen()),
       ),
       GoRoute(
@@ -65,7 +174,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (c, s) => _instantPage(s, const BodyScreen()),
       ),
       GoRoute(
-        path: '/home',
+        path: _homeLocation,
         pageBuilder: (c, s) =>
             _instantPage(s, const HomeShell(child: SizedBox.shrink())),
         routes: [
@@ -85,7 +194,58 @@ final _routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  ref.onDispose(router.dispose);
+  return router;
 });
+
+class _ProfileLoadErrorScreen extends ConsumerWidget {
+  const _ProfileLoadErrorScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = ref.watch(l10nProvider);
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.get('profileLoadErrorTitle'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.get('profileLoadErrorBody'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => ref.invalidate(userProfileProvider),
+                  icon: const Icon(Icons.refresh),
+                  label: Text(l10n.get('retry')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class FitForgeApp extends ConsumerStatefulWidget {
   const FitForgeApp({super.key});
@@ -93,23 +253,93 @@ class FitForgeApp extends ConsumerStatefulWidget {
   ConsumerState<FitForgeApp> createState() => _FitForgeAppState();
 }
 
+class AuthTransitionHandler {
+  final String Function() _readCurrentUserId;
+  final void Function(String userId) _setCurrentUserId;
+  final void Function() _invalidateProfile;
+  final void Function() _initializeWorkoutCache;
+  final void Function() _initializeDietCache;
+  final void Function() _startFullSync;
+  String? _lastSyncedUserId;
+
+  factory AuthTransitionHandler({
+    required String Function() readCurrentUserId,
+    required void Function(String userId) setCurrentUserId,
+    required void Function() invalidateProfile,
+    required void Function() initializeWorkoutCache,
+    required void Function() initializeDietCache,
+    required void Function() startFullSync,
+  }) {
+    return AuthTransitionHandler._(
+      readCurrentUserId,
+      setCurrentUserId,
+      invalidateProfile,
+      initializeWorkoutCache,
+      initializeDietCache,
+      startFullSync,
+    );
+  }
+
+  AuthTransitionHandler._(
+    this._readCurrentUserId,
+    this._setCurrentUserId,
+    this._invalidateProfile,
+    this._initializeWorkoutCache,
+    this._initializeDietCache,
+    this._startFullSync,
+  );
+
+  void handle(String userId, {bool forceProfileRefresh = false}) {
+    final userChanged = _readCurrentUserId() != userId;
+    if (userChanged) _setCurrentUserId(userId);
+    if (userChanged || (forceProfileRefresh && userId.isNotEmpty)) {
+      _invalidateProfile();
+    }
+
+    if (userId.isEmpty) {
+      _lastSyncedUserId = null;
+      return;
+    }
+    if (_lastSyncedUserId != userId) {
+      _lastSyncedUserId = userId;
+      _startFullSync();
+    }
+    _initializeWorkoutCache();
+    _initializeDietCache();
+  }
+}
+
 class _FitForgeAppState extends ConsumerState<FitForgeApp>
     with WidgetsBindingObserver {
   StreamSubscription<AuthState>? _authSubscription;
+  late final AuthTransitionHandler _authTransitionHandler;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _authTransitionHandler = AuthTransitionHandler(
+      readCurrentUserId: () => ref.read(currentUserIdProvider),
+      setCurrentUserId: (userId) {
+        ref.read(currentUserIdProvider.notifier).state = userId;
+      },
+      invalidateProfile: () => ref.invalidate(userProfileProvider),
+      initializeWorkoutCache: () {
+        ref.read(workoutCacheProvider.notifier).loadAll();
+      },
+      initializeDietCache: () {
+        ref.read(dietCacheProvider.notifier).loadDate(DateTime.now());
+      },
+      startFullSync: () => unawaited(SyncService.instance.fullSync()),
+    );
+    _authTransitionHandler.handle(
+      Supabase.instance.client.auth.currentUser?.id ?? '',
+      forceProfileRefresh: true,
+    );
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
       data,
     ) {
-      final userId = data.session?.user.id ?? '';
-      ref.read(currentUserIdProvider.notifier).state = userId;
-      if (userId.isNotEmpty) {
-        ref.read(workoutCacheProvider.notifier).loadAll();
-        ref.read(dietCacheProvider.notifier).loadDate(DateTime.now());
-      }
+      _authTransitionHandler.handle(data.session?.user.id ?? '');
     });
   }
 
@@ -131,7 +361,7 @@ class _FitForgeAppState extends ConsumerState<FitForgeApp>
 
   @override
   Widget build(BuildContext context) {
-    final router = ref.watch(_routerProvider);
+    final router = ref.watch(fitForgeRouterProvider);
     final appLocale = ref.watch(localeProvider);
     return MaterialApp.router(
       title: 'FitForge',

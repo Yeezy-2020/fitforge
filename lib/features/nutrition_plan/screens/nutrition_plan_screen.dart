@@ -41,7 +41,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
   late final Animation<double> _curvedAnim;
 
   static const _presetTemplates = {
-    'Classic 7-Day': [
+    'presetClassicSevenDay': [
       'low',
       'low',
       'medium',
@@ -50,26 +50,20 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
       'medium',
       'high',
     ],
-    '3-Day Rolling': ['low', 'medium', 'high'],
-    '5-Day Split': ['low', 'low', 'medium', 'medium', 'high'],
-    '4-Day Low Focus': ['low', 'low', 'low', 'medium'],
-    '2-Day Alternating': ['low', 'high'],
+    'presetThreeDayRolling': ['low', 'medium', 'high'],
+    'presetFiveDaySplit': ['low', 'low', 'medium', 'medium', 'high'],
+    'presetFourDayLowFocus': ['low', 'low', 'low', 'medium'],
+    'presetTwoDayAlternating': ['low', 'high'],
   };
 
-  static const _activityLabels = [
-    'Sedentary',
-    'Lightly Active',
-    'Moderate',
-    'Very Active',
-    'Extremely Active',
+  static const _activityLabelKeys = [
+    'activitySedentary',
+    'activityLight',
+    'activityModerate',
+    'activityVeryActive',
+    'activityExtremelyActive',
   ];
-  static const _activityFrequency = [
-    '0-1 ×/week',
-    '1-2 ×/week',
-    '3-4 ×/week',
-    '5-6 ×/week',
-    '6-7 ×/week',
-  ];
+  static const _activityFrequencyRanges = ['0-1', '1-2', '3-4', '5-6', '6-7'];
   static const _activityValues = [1.2, 1.375, 1.55, 1.725, 1.9];
 
   Color get _mutedTextColor => Theme.of(context).colorScheme.onSurfaceVariant;
@@ -171,7 +165,6 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
   // ONBOARDING
   // ================================
   Widget _buildOnboarding(L10n l10n, UserProfile profile) {
-    final isEn = ref.watch(localeProvider) == AppLocale.en;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.get('nutritionPlan'))),
       body: MetallicReadingSurface(
@@ -203,12 +196,12 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                   child: KeyedSubtree(
                     key: ValueKey(_step),
                     child: _step == 0
-                        ? _stepGoal(l10n, isEn)
+                        ? _stepGoal(l10n)
                         : _step == 1
-                        ? _stepPlan(l10n, isEn)
+                        ? _stepPlan(l10n)
                         : _step == 2
-                        ? _stepActivity(l10n, isEn)
-                        : _stepDuration(l10n, isEn),
+                        ? _stepActivity(l10n)
+                        : _stepDuration(l10n),
                   ),
                 ),
               ),
@@ -227,7 +220,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                           setState(() => _step--);
                         }
                       },
-                      child: const Text('Back'),
+                      child: Text(l10n.get('back')),
                     ),
                   const Spacer(),
                   FilledButton(
@@ -246,7 +239,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                         setState(() => _step = 4);
                       }
                     },
-                    child: Text(_step == 3 ? 'Get Started' : 'Next'),
+                    child: Text(l10n.get(_step == 3 ? 'getStarted' : 'next')),
                   ),
                 ],
               ),
@@ -284,41 +277,41 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     );
   }
 
-  Widget _stepGoal(L10n l10n, bool isEn) {
+  Widget _stepGoal(L10n l10n) {
     return Column(
       children: [
         Text(
-          'What\'s your goal?',
+          l10n.get('nutritionGoalQuestion'),
           style: Theme.of(
             context,
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          'This determines your calorie target',
+          l10n.get('nutritionGoalHint'),
           style: TextStyle(color: _mutedTextColor),
         ),
         const SizedBox(height: 32),
         _goalCard(
           Icons.trending_down,
-          'Cut',
-          'Lose fat while preserving muscle.\n500 kcal daily deficit.',
+          l10n.get('cut'),
+          l10n.get('nutritionCutDescription'),
           _goal == 'cut',
           () => setState(() => _goal = 'cut'),
         ),
         const SizedBox(height: 12),
         _goalCard(
           Icons.trending_flat,
-          'Maintain',
-          'Keep your current body composition.\nEat at maintenance calories.',
+          l10n.get('maintain'),
+          l10n.get('nutritionMaintainDescription'),
           _goal == 'maintain',
           () => setState(() => _goal = 'maintain'),
         ),
         const SizedBox(height: 12),
         _goalCard(
           Icons.trending_up,
-          'Bulk',
-          'Build muscle with controlled surplus.\n+200-500 kcal daily surplus.',
+          l10n.get('bulk'),
+          l10n.get('nutritionBulkDescription'),
           _goal == 'bulk',
           () => setState(() => _goal = 'bulk'),
         ),
@@ -384,12 +377,12 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     );
   }
 
-  Widget _stepPlan(L10n l10n, bool isEn) {
-    if (_goal == 'maintain') return _stepActivity(l10n, isEn);
+  Widget _stepPlan(L10n l10n) {
+    if (_goal == 'maintain') return _stepActivity(l10n);
     return Column(
       children: [
         Text(
-          'Choose your method',
+          l10n.get('nutritionChooseMethod'),
           style: Theme.of(
             context,
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
@@ -397,48 +390,48 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
         const SizedBox(height: 8),
         Text(
           _goal == 'cut'
-              ? 'Two evidence-based approaches for fat loss'
-              : 'Select your training experience',
+              ? l10n.get('nutritionCutMethodHint')
+              : l10n.get('nutritionExperienceHint'),
           style: TextStyle(color: _mutedTextColor),
         ),
         const SizedBox(height: 32),
         if (_goal == 'cut') ...[
           _goalCard(
             Icons.loop,
-            'Carb Cycling',
-            'Rotate high/medium/low carb days\nbased on training intensity.\nMetabolically adaptive.',
+            l10n.get('carbCycling'),
+            l10n.get('carbCyclingDescription'),
             _planType == 'carb_cycle',
             () => setState(() => _planType = 'carb_cycle'),
           ),
           const SizedBox(height: 12),
           _goalCard(
             Icons.arrow_downward,
-            'Carb Taper',
-            'Gradually reduce carbs each phase.\nSimple and predictable.\nRefeed every 2-4 weeks.',
+            l10n.get('carbTaper'),
+            l10n.get('carbTaperDescription'),
             _planType == 'carb_taper',
             () => setState(() => _planType = 'carb_taper'),
           ),
         ] else ...[
           _goalCard(
             Icons.person,
-            'Beginner (< 1yr)',
-            '+500 kcal, high carb ratio.\nMaximize newbie gains.',
+            l10n.get('beginnerExperience'),
+            l10n.get('beginnerExperienceDescription'),
             _experience == 'beginner',
             () => setState(() => _experience = 'beginner'),
           ),
           const SizedBox(height: 12),
           _goalCard(
             Icons.person_outline,
-            'Intermediate (1-3yr)',
-            '+300-400 kcal.\nBalanced macro split.',
+            l10n.get('intermediateExperience'),
+            l10n.get('intermediateExperienceDescription'),
             _experience == 'intermediate',
             () => setState(() => _experience = 'intermediate'),
           ),
           const SizedBox(height: 12),
           _goalCard(
             Icons.school,
-            'Advanced (3+yr)',
-            '+200-300 kcal.\nHigher protein, leaner gains.',
+            l10n.get('advancedExperience'),
+            l10n.get('advancedExperienceDescription'),
             _experience == 'advanced',
             () => setState(() => _experience = 'advanced'),
           ),
@@ -447,32 +440,56 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     );
   }
 
-  Widget _stepActivity(L10n l10n, bool isEn) {
+  String _trainingFrequencyLabel(L10n l10n, int index) {
+    return l10n.format('trainingFrequency', {
+      'range': _activityFrequencyRanges[index.clamp(0, 4)],
+    });
+  }
+
+  String _durationLabel(L10n l10n, {required int weeks, required int days}) {
+    return l10n.format('durationWeeksDays', {
+      'weeks': weeks.toString(),
+      'days': days.toString(),
+    });
+  }
+
+  String _carbTypeShortLabel(L10n l10n, String type) {
+    return l10n.get(
+      {
+            'low': 'lowCarbShort',
+            'medium': 'mediumCarbShort',
+            'high': 'highCarbShort',
+          }[type] ??
+          'lowCarbShort',
+    );
+  }
+
+  Widget _stepActivity(L10n l10n) {
     final idx = _activityValues.indexOf(_activityFactor);
     return Column(
       children: [
         Text(
-          'Activity Level',
+          l10n.get('activityLevel'),
           style: Theme.of(
             context,
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          'How active is your daily life\n(outside of workouts)?',
+          l10n.get('activityLevelDescription'),
           textAlign: TextAlign.center,
           style: TextStyle(color: _mutedTextColor),
         ),
         const SizedBox(height: 32),
         Text(
-          _activityLabels[idx.clamp(0, 4)],
+          l10n.get(_activityLabelKeys[idx.clamp(0, 4)]),
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
         Text(
-          'Train ${_activityFrequency[idx.clamp(0, 4)]}',
+          _trainingFrequencyLabel(l10n, idx),
           style: TextStyle(fontSize: 16, color: _mutedTextColor),
         ),
         const SizedBox(height: 24),
@@ -480,7 +497,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
           value: idx.toDouble().clamp(0, 4),
           max: 4,
           divisions: 4,
-          label: _activityLabels[idx.clamp(0, 4)],
+          label: l10n.get(_activityLabelKeys[idx.clamp(0, 4)]),
           onChanged: (v) =>
               setState(() => _activityFactor = _activityValues[v.round()]),
         ),
@@ -488,79 +505,79 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     );
   }
 
-  Widget _stepDuration(L10n l10n, bool isEn) {
+  Widget _stepDuration(L10n l10n) {
     return Column(
       children: [
         Text(
-          'Plan Duration',
+          l10n.get('planDuration'),
           style: Theme.of(
             context,
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          'How many days will you follow this plan?',
+          l10n.get('planDurationQuestion'),
           style: TextStyle(color: _mutedTextColor),
         ),
         const SizedBox(height: 32),
         _goalCard(
           Icons.calendar_today,
-          '4 Weeks (28 days)',
-          'Standard mini-cut duration.',
+          _durationLabel(l10n, weeks: 4, days: 28),
+          l10n.get('durationFourWeeksDescription'),
           _planDurationDays == 28,
           () => setState(() => _planDurationDays = 28),
         ),
         const SizedBox(height: 12),
         _goalCard(
           Icons.calendar_month,
-          '8 Weeks (56 days)',
-          'Moderate fat loss phase.',
+          _durationLabel(l10n, weeks: 8, days: 56),
+          l10n.get('durationEightWeeksDescription'),
           _planDurationDays == 56,
           () => setState(() => _planDurationDays = 56),
         ),
         const SizedBox(height: 12),
         _goalCard(
           Icons.date_range,
-          '12 Weeks (84 days)',
-          'Extended deficit, refeeds included.',
+          _durationLabel(l10n, weeks: 12, days: 84),
+          l10n.get('durationTwelveWeeksDescription'),
           _planDurationDays == 84,
           () => setState(() => _planDurationDays = 84),
         ),
         const SizedBox(height: 12),
         _goalCard(
           Icons.edit_calendar,
-          'Custom',
-          'Set your own duration.',
+          l10n.get('custom'),
+          l10n.get('customDurationDescription'),
           _planDurationDays != null &&
               ![28, 56, 84].contains(_planDurationDays),
-          () => _showDurationPicker(),
+          () => _showDurationPicker(l10n),
         ),
       ],
     );
   }
 
-  void _showDurationPicker() {
+  void _showDurationPicker(L10n l10n) {
     final ctrl = TextEditingController(
       text: (_planDurationDays ?? 30).toString(),
     );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Custom Duration'),
+        title: Text(l10n.get('customDuration')),
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.number,
           autofocus: true,
-          decoration: const InputDecoration(
-            suffixText: 'days',
-            hintText: 'e.g. 45',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            suffixText: l10n.get('days'),
+            hintText: l10n.get('durationExample'),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(l10n.get('cancel')),
           ),
           FilledButton(
             onPressed: () {
@@ -570,7 +587,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
               }
               Navigator.pop(ctx);
             },
-            child: const Text('OK'),
+            child: Text(l10n.get('ok')),
           ),
         ],
       ),
@@ -612,9 +629,9 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
       );
       planLabel =
           {
-            'high': 'High Carb',
-            'medium': 'Med Carb',
-            'low': 'Low Carb',
+            'high': l10n.get('highCarb'),
+            'medium': l10n.get('mediumCarb'),
+            'low': l10n.get('lowCarb'),
           }[templateDay] ??
           '';
     } else if (_planType == 'carb_taper') {
@@ -625,10 +642,10 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
         3.0,
         1.0,
       );
-      planLabel = 'Carb Taper';
+      planLabel = l10n.get('carbTaper');
     } else {
       targets = calc.bulk(profile, _activityFactor, surplus, _experience);
-      planLabel = 'Bulk';
+      planLabel = l10n.get('bulk');
     }
 
     // Actual intake from diet cache
@@ -670,13 +687,13 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                           Expanded(
                             child: Center(
                               child: Text(
-                                'Daily Targets',
+                                l10n.get('dailyTargets'),
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ),
                           ),
                           Text(
-                            _buildDayLabel(today),
+                            _buildDayLabel(l10n, today),
                             style: TextStyle(
                               fontSize: 12,
                               color: _mutedTextColor,
@@ -696,17 +713,17 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                           ),
                           _stat(
                             '${targets.protein.toStringAsFixed(0)}g',
-                            'Protein',
+                            l10n.get('protein'),
                             Colors.blue,
                           ),
                           _stat(
                             '${targets.carbs.toStringAsFixed(0)}g',
-                            'Carbs',
+                            l10n.get('carbs'),
                             Colors.orange,
                           ),
                           _stat(
                             '${targets.fat.toStringAsFixed(0)}g',
-                            'Fat',
+                            l10n.get('fat'),
                             Colors.red,
                           ),
                         ],
@@ -723,7 +740,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                   child: Column(
                     children: [
                       Text(
-                        'Today\'s Intake',
+                        l10n.get('todaysIntake'),
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 12),
@@ -735,15 +752,15 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'No meals logged today',
+                          l10n.get('noMeals'),
                           style: TextStyle(color: _mutedTextColor),
                         ),
                         const SizedBox(height: 4),
                         TextButton(
                           onPressed: () => context.push('/home'),
-                          child: const Text(
-                            'Go to Diet tab →',
-                            style: TextStyle(fontSize: 12),
+                          child: Text(
+                            l10n.get('goToDietTab'),
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ),
                       ] else ...[
@@ -755,20 +772,25 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                         ),
                         const SizedBox(height: 8),
                         _progress(
-                          'Protein',
+                          l10n.get('protein'),
                           actualP,
                           targets.protein,
                           Colors.blue,
                         ),
                         const SizedBox(height: 8),
                         _progress(
-                          'Carbs',
+                          l10n.get('carbs'),
                           actualC,
                           targets.carbs,
                           Colors.orange,
                         ),
                         const SizedBox(height: 8),
-                        _progress('Fat', actualF, targets.fat, Colors.red),
+                        _progress(
+                          l10n.get('fat'),
+                          actualF,
+                          targets.fat,
+                          Colors.red,
+                        ),
                       ],
                     ],
                   ),
@@ -799,12 +821,14 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                         const Icon(Icons.loop, size: 18, color: Colors.orange),
                         const SizedBox(width: 8),
                         Text(
-                          'Next Refeed: ${_daysUntilRefeed()} days',
+                          l10n.format('nextRefeed', {
+                            'days': _daysUntilRefeed().toString(),
+                          }),
                           style: const TextStyle(fontSize: 13),
                         ),
                         const Spacer(),
                         Text(
-                          'Every 14 days',
+                          l10n.get('everyFourteenDays'),
                           style: TextStyle(
                             fontSize: 11,
                             color: _mutedTextColor,
@@ -827,14 +851,14 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                         Row(
                           children: [
                             Text(
-                              'Cycle Pattern',
+                              l10n.get('cyclePattern'),
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                             const Spacer(),
                             IconButton(
                               icon: const Icon(Icons.edit, size: 16),
-                              onPressed: _showCycleEditor,
-                              tooltip: 'Edit template',
+                              onPressed: () => _showCycleEditor(l10n),
+                              tooltip: l10n.get('editTemplate'),
                             ),
                           ],
                         ),
@@ -889,7 +913,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                                       ),
                                     ),
                                     Text(
-                                      t[0].toUpperCase(),
+                                      _carbTypeShortLabel(l10n, t),
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
@@ -914,7 +938,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
               OutlinedButton.icon(
                 onPressed: () => _showEditActivity(l10n),
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Edit Activity'),
+                label: Text(l10n.get('editActivity')),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 44),
                 ),
@@ -923,7 +947,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
               OutlinedButton.icon(
                 onPressed: () => _confirmReset(l10n),
                 icon: const Icon(Icons.refresh, size: 18, color: Colors.red),
-                label: const Text('Reset Plan'),
+                label: Text(l10n.get('resetPlan')),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 44),
                   foregroundColor: Colors.red,
@@ -1016,11 +1040,16 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     ),
   );
 
-  String _buildDayLabel(DateTime today) {
+  String _buildDayLabel(L10n l10n, DateTime today) {
     final startDate = _planStartDate ?? DateTime.now();
     final dayCount = today.difference(startDate).inDays + 1;
     final d = _planDurationDays;
-    return d != null ? 'Day $dayCount/$d' : 'Day $dayCount';
+    return d != null
+        ? l10n.format('planDayWithDuration', {
+            'current': dayCount.toString(),
+            'total': d.toString(),
+          })
+        : l10n.format('planDay', {'current': dayCount.toString()});
   }
 
   void _showEditActivity(L10n l10n) {
@@ -1030,22 +1059,22 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
         builder: (ctx, setDialogState) {
           final i = _activityValues.indexOf(_activityFactor);
           return AlertDialog(
-            title: const Text('Edit Settings'),
+            title: Text(l10n.get('editSettings')),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Activity Level',
+                  l10n.get('activityLevel'),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _activityLabels[i.clamp(0, 4)],
+                  l10n.get(_activityLabelKeys[i.clamp(0, 4)]),
                   style: const TextStyle(fontSize: 16),
                 ),
                 Text(
-                  'Train ${_activityFrequency[i.clamp(0, 4)]}',
+                  _trainingFrequencyLabel(l10n, i),
                   style: TextStyle(color: _mutedTextColor),
                 ),
                 Slider(
@@ -1059,18 +1088,24 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                 if (_goal == 'bulk') ...[
                   const SizedBox(height: 16),
                   Text(
-                    'Training Experience',
+                    l10n.get('trainingExperience'),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'beginner', label: Text('Beginner')),
+                    segments: [
+                      ButtonSegment(
+                        value: 'beginner',
+                        label: Text(l10n.get('beginner')),
+                      ),
                       ButtonSegment(
                         value: 'intermediate',
-                        label: Text('Intermed.'),
+                        label: Text(l10n.get('intermediateShort')),
                       ),
-                      ButtonSegment(value: 'advanced', label: Text('Advanced')),
+                      ButtonSegment(
+                        value: 'advanced',
+                        label: Text(l10n.get('advanced')),
+                      ),
                     ],
                     selected: {_experience},
                     onSelectionChanged: (v) =>
@@ -1079,7 +1114,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                 ],
                 const SizedBox(height: 16),
                 Text(
-                  'Plan Duration',
+                  l10n.get('planDuration'),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -1090,7 +1125,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                       .map(
                         (d) => ChoiceChip(
                           label: Text(
-                            '$d days',
+                            l10n.format('durationDays', {'days': d.toString()}),
                             style: const TextStyle(fontSize: 11),
                           ),
                           selected: _planDurationDays == d,
@@ -1104,16 +1139,16 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                 OutlinedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    _showDurationPicker();
+                    _showDurationPicker(l10n);
                   },
-                  child: const Text('Custom...'),
+                  child: Text(l10n.get('customEllipsis')),
                 ),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(l10n.get('cancel')),
               ),
               FilledButton(
                 onPressed: () {
@@ -1121,7 +1156,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                   setState(() {});
                   Navigator.pop(ctx);
                 },
-                child: const Text('Save'),
+                child: Text(l10n.get('save')),
               ),
             ],
           );
@@ -1130,11 +1165,11 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     );
   }
 
-  void _showCycleEditor() {
+  void _showCycleEditor(L10n l10n) {
     final labels = {
-      'low': 'Low Carb',
-      'medium': 'Med Carb',
-      'high': 'High Carb',
+      'low': l10n.get('lowCarb'),
+      'medium': l10n.get('mediumCarb'),
+      'high': l10n.get('highCarb'),
     };
     final template = List<String>.from(_cycleTemplate);
     final startCtrl = TextEditingController(
@@ -1162,17 +1197,22 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Edit Cycle Pattern',
+                    l10n.get('editCyclePattern'),
                     style: Theme.of(ctx).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${template.length} days · Today is highlighted',
+                    l10n.format('cycleDaysHighlighted', {
+                      'days': template.length.toString(),
+                    }),
                     style: TextStyle(color: _mutedTextColor, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   // Presets
-                  Text('Presets', style: Theme.of(ctx).textTheme.titleSmall),
+                  Text(
+                    l10n.get('presets'),
+                    style: Theme.of(ctx).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
@@ -1181,7 +1221,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                         .map(
                           (e) => ActionChip(
                             label: Text(
-                              e.key,
+                              l10n.get(e.key),
                               style: const TextStyle(fontSize: 11),
                             ),
                             onPressed: () {
@@ -1197,7 +1237,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Custom Pattern',
+                    l10n.get('customPattern'),
                     style: Theme.of(ctx).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 8),
@@ -1233,7 +1273,10 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Day ${e.key + 1}: ${labels[t]}',
+                                l10n.format('cycleDayLabel', {
+                                  'day': (e.key + 1).toString(),
+                                  'type': labels[t] ?? '',
+                                }),
                                 style: const TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -1262,15 +1305,18 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                       onPressed: () =>
                           setSheetState(() => template.add('medium')),
                       icon: const Icon(Icons.add, size: 16),
-                      label: const Text('Add Day'),
+                      label: Text(l10n.get('addDay')),
                     ),
                   ],
                   const SizedBox(height: 16),
                   // Start date
-                  Text('Start Date', style: Theme.of(ctx).textTheme.titleSmall),
+                  Text(
+                    l10n.get('startDate'),
+                    style: Theme.of(ctx).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                    'Cycle starts from this date (leave empty for today)',
+                    l10n.get('cycleStartDateHint'),
                     style: TextStyle(fontSize: 12, color: _mutedTextColor),
                   ),
                   const SizedBox(height: 8),
@@ -1291,7 +1337,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
+                        child: Text(l10n.get('cancel')),
                       ),
                       const Spacer(),
                       FilledButton(
@@ -1303,7 +1349,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                           _savePlan();
                           setState(() {});
                         },
-                        child: const Text('Save'),
+                        child: Text(l10n.get('save')),
                       ),
                     ],
                   ),
@@ -1326,14 +1372,12 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset Plan'),
-        content: const Text(
-          'This will restart the plan selection process. Your current settings will be replaced.',
-        ),
+        title: Text(l10n.get('resetPlan')),
+        content: Text(l10n.get('resetPlanDescription')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(l10n.get('cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -1351,7 +1395,7 @@ class _NutritionPlanState extends ConsumerState<NutritionPlanScreen>
                 _planDurationDays = null;
               });
             },
-            child: const Text('Reset'),
+            child: Text(l10n.get('reset')),
           ),
         ],
       ),

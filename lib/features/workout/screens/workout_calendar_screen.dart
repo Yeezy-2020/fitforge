@@ -538,9 +538,8 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           itemCount: logs.length,
                           buildDefaultDragHandles: false,
-                          onReorder: (oldI, newI) {
+                          onReorderItem: (oldI, newI) {
                             final list = List<WorkoutLog>.from(logs);
-                            if (newI > oldI) newI--;
                             list.insert(newI, list.removeAt(oldI));
                             ref
                                 .read(workoutLogCacheProvider.notifier)
@@ -707,6 +706,9 @@ class _State extends ConsumerState<WorkoutCalendarScreen>
                 id: log.id,
                 userId: log.userId,
                 exerciseId: log.exerciseId,
+                programId: log.programId,
+                programDayId: log.programDayId,
+                programExerciseId: log.programExerciseId,
                 date: log.date,
                 sets: ns,
                 reps: nr,

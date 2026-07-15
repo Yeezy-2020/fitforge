@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/l10n.dart';
 import '../../../providers/app_providers.dart';
+import '../../../providers/settings_providers.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -12,17 +14,28 @@ class PaywallScreen extends ConsumerStatefulWidget {
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   int _selectedPlan = 1; // 0 = monthly, 1 = annual (default)
 
-  void _handleSubscribe() async {
+  Future<void> _handleSubscribe() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = ref.read(l10nProvider);
     await ref.read(isProProvider.notifier).setPro(true);
+    if (!mounted) return;
     context.pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('订阅成功！(演示模式)')),
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.get('subscriptionDemoSuccess'))),
     );
   }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = ref.watch(l10nProvider);
     return Scaffold(
-      appBar: AppBar(leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.pop())),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          tooltip: l10n.get('close'),
+          onPressed: () => context.pop(),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -30,51 +43,68 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
-              Icon(Icons.workspace_premium, size: 64, color: Colors.amber.shade600),
+              Icon(
+                Icons.workspace_premium,
+                size: 64,
+                color: Colors.amber.shade600,
+              ),
               const SizedBox(height: 16),
               Text(
-                'Upgrade to FitForge Pro',
+                l10n.get('upgradePro'),
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Unlock personalized nutrition plans',
+                l10n.get('unlockNutrition'),
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
               ),
               const SizedBox(height: 32),
               _SubscriptionCard(
-                title: 'Monthly',
-                price: '\$9.99/mo',
+                title: l10n.get('monthly'),
+                price: l10n.get('monthlyPrice'),
+                recommendedLabel: l10n.get('bestValue'),
                 isRecommended: false,
                 isSelected: _selectedPlan == 0,
                 onTap: () => setState(() => _selectedPlan = 0),
               ),
               const SizedBox(height: 12),
               _SubscriptionCard(
-                title: 'Annual',
-                price: '\$59.99/yr',
-                subtitle: 'Equivalent to \$4.99/mo',
+                title: l10n.get('annual'),
+                price: l10n.get('annualPrice'),
+                subtitle: l10n.get('annualEquivalent'),
+                recommendedLabel: l10n.get('bestValue'),
                 isRecommended: true,
                 isSelected: _selectedPlan == 1,
                 onTap: () => setState(() => _selectedPlan = 1),
               ),
               const SizedBox(height: 24),
-              const _FeatureList(),
+              _FeatureList(l10n: l10n),
               const Spacer(),
               FilledButton(
                 onPressed: _handleSubscribe,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(_selectedPlan == 0 ? 'Subscribe Monthly' : 'Subscribe Annually', style: const TextStyle(fontSize: 16)),
+                  child: Text(
+                    _selectedPlan == 0
+                        ? l10n.get('subscribeMonthly')
+                        : l10n.get('subscribeAnnually'),
+                    style: const TextStyle(fontSize: 16),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Subscribe via App Store / Google Play',
+                l10n.get('subscribeVia'),
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.grey),
               ),
             ],
           ),
@@ -88,6 +118,7 @@ class _SubscriptionCard extends StatelessWidget {
   final String title;
   final String price;
   final String? subtitle;
+  final String recommendedLabel;
   final bool isRecommended;
   final bool isSelected;
   final VoidCallback onTap;
@@ -95,6 +126,7 @@ class _SubscriptionCard extends StatelessWidget {
     required this.title,
     required this.price,
     this.subtitle,
+    required this.recommendedLabel,
     required this.isRecommended,
     required this.isSelected,
     required this.onTap,
@@ -119,23 +151,50 @@ class _SubscriptionCard extends StatelessWidget {
             children: [
               if (isRecommended)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(8)),
-                  child: const Text('Best Value', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  decoration: BoxDecoration(
+                    color: c.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    recommendedLabel,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
                 ),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: theme.textTheme.titleMedium),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(subtitle!, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleMedium),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ],
-                ]),
+                ),
               ),
-              Text(price, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text(
+                price,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(width: 8),
-              Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? c.primary : Colors.grey),
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: isSelected ? c.primary : Colors.grey,
+              ),
             ],
           ),
         ),
@@ -145,16 +204,18 @@ class _SubscriptionCard extends StatelessWidget {
 }
 
 class _FeatureList extends StatelessWidget {
-  const _FeatureList();
+  final L10n l10n;
+
+  const _FeatureList({required this.l10n});
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      'Personalized macro ratios (cut/bulk)',
-      'Daily macro tracking',
-      'Nutrition intake progress charts',
-      'Detailed food macro analysis',
-      'Unlimited workout history sync',
+    final items = [
+      l10n.get('proFeature1'),
+      l10n.get('proFeature2'),
+      l10n.get('proFeature3'),
+      l10n.get('proFeature4'),
+      l10n.get('proFeature5'),
     ];
 
     return Column(

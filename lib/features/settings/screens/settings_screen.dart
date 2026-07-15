@@ -19,14 +19,84 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         children: [
           _header(theme, l10n.get('language')),
-          _radioTile<AppLocale>(title: l10n.get('english'), subtitle: 'English', value: AppLocale.en, groupValue: locale, onChanged: (v) => ref.read(localeProvider.notifier).state = v),
-          _radioTile<AppLocale>(title: l10n.get('chinese'), subtitle: '中文', value: AppLocale.zh, groupValue: locale, onChanged: (v) => ref.read(localeProvider.notifier).state = v),
+          RadioGroup<AppLocale>(
+            groupValue: locale,
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(localeProvider.notifier).state = value;
+              }
+            },
+            child: Column(
+              children: [
+                _radioTile<AppLocale>(
+                  title: l10n.get('english'),
+                  subtitle: l10n.get('englishNative'),
+                  value: AppLocale.en,
+                  onChanged: (value) =>
+                      ref.read(localeProvider.notifier).state = value,
+                ),
+                _radioTile<AppLocale>(
+                  title: l10n.get('chinese'),
+                  subtitle: l10n.get('chineseNative'),
+                  value: AppLocale.zh,
+                  onChanged: (value) =>
+                      ref.read(localeProvider.notifier).state = value,
+                ),
+              ],
+            ),
+          ),
           _header(theme, l10n.get('trainingWeightUnit')),
-          _radioTile<WeightUnit>(title: 'Kilogram (kg)', value: WeightUnit.kg, groupValue: trainUnit, onChanged: (v) => ref.read(trainingWeightUnitProvider.notifier).state = v),
-          _radioTile<WeightUnit>(title: 'Pound (lb)', value: WeightUnit.lb, groupValue: trainUnit, onChanged: (v) => ref.read(trainingWeightUnitProvider.notifier).state = v),
+          RadioGroup<WeightUnit>(
+            groupValue: trainUnit,
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(trainingWeightUnitProvider.notifier).state = value;
+              }
+            },
+            child: Column(
+              children: [
+                _radioTile<WeightUnit>(
+                  title: l10n.get('kilogram'),
+                  value: WeightUnit.kg,
+                  onChanged: (value) =>
+                      ref.read(trainingWeightUnitProvider.notifier).state =
+                          value,
+                ),
+                _radioTile<WeightUnit>(
+                  title: l10n.get('pound'),
+                  value: WeightUnit.lb,
+                  onChanged: (value) =>
+                      ref.read(trainingWeightUnitProvider.notifier).state =
+                          value,
+                ),
+              ],
+            ),
+          ),
           _header(theme, l10n.get('dietWeightUnit')),
-          _radioTile<DietWeightUnit>(title: 'Gram (g)', value: DietWeightUnit.g, groupValue: dietUnit, onChanged: (v) => ref.read(dietWeightUnitProvider.notifier).state = v),
-          _radioTile<DietWeightUnit>(title: 'Ounce (oz)', value: DietWeightUnit.oz, groupValue: dietUnit, onChanged: (v) => ref.read(dietWeightUnitProvider.notifier).state = v),
+          RadioGroup<DietWeightUnit>(
+            groupValue: dietUnit,
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(dietWeightUnitProvider.notifier).state = value;
+              }
+            },
+            child: Column(
+              children: [
+                _radioTile<DietWeightUnit>(
+                  title: l10n.get('gram'),
+                  value: DietWeightUnit.g,
+                  onChanged: (value) =>
+                      ref.read(dietWeightUnitProvider.notifier).state = value,
+                ),
+                _radioTile<DietWeightUnit>(
+                  title: l10n.get('ounce'),
+                  value: DietWeightUnit.oz,
+                  onChanged: (value) =>
+                      ref.read(dietWeightUnitProvider.notifier).state = value,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -36,13 +106,12 @@ class SettingsScreen extends ConsumerWidget {
     required String title,
     String? subtitle,
     required T value,
-    required T groupValue,
     required void Function(T) onChanged,
   }) {
     return ListTile(
       title: Text(title),
       subtitle: subtitle != null ? Text(subtitle) : null,
-      trailing: Radio<T>(value: value, groupValue: groupValue, onChanged: (v) { if (v != null) onChanged(v); }),
+      trailing: Radio<T>(value: value),
       onTap: () => onChanged(value),
     );
   }
@@ -50,7 +119,12 @@ class SettingsScreen extends ConsumerWidget {
   Widget _header(ThemeData theme, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(title, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary)),
+      child: Text(
+        title,
+        style: theme.textTheme.titleSmall?.copyWith(
+          color: theme.colorScheme.primary,
+        ),
+      ),
     );
   }
 }

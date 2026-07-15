@@ -1,64 +1,46 @@
 # FitForge Roadmap
 
-last_verified_commit: `b8d3a28`
-last_verified_date: `2026-07-09 UTC`
+last_verified_commit: `18cb461`
+last_verified_date: `2026-07-15 UTC`
 
-This roadmap covers the next 1-3 months at a lightweight internet-product planning level. It should guide sequencing, not freeze scope.
+## Month 1: Mobile Training Stabilization
 
-## Month 1: Training Program Stabilization
+Status: automated stabilization is locally complete; the 2026-07-15 LAN fast
+smoke passed the core program, deload, activation, save/advance, localization,
+restart, rotation, and stability paths without finding a product defect.
 
-Goals:
-
-- Make the current training-plan flow reliable enough for repeated mobile use.
-- Close obvious copy, i18n, and interaction gaps around cycle/round progression.
-- Keep new training-plan work covered by focused tests and task reports.
-
-Candidate work:
-
-- Execute the mobile smoke checklist for program creation, edit, activation, date scheduling, pause/resume/end, deload, logging, and advancement.
-- Long-gap recovery prompt mobile manual smoke.
-- Training-program UI split plan for `program_detail_screen.dart` and `workout_day_screen.dart`.
-- Keep cycle-vs-week wording clean as future progression and scheduling copy changes.
+- Keep training-program creation/edit/activation/deload/logging/advancement tests green.
+- Complete only the remaining manual/timeboxed subcases recorded in
+  `TRAINING_PROGRAM_SMOKE_CHECKLIST.md`; use same-LAN ADB and the prepared
+  same-signed 23.3 MB version-code 1 release APK.
+- Use device findings, not speculative refactors, to reopen P1 defects.
 
 Exit criteria:
 
-- Training program flows have repeatable test/smoke coverage.
-- Known P0 training-plan risks are either mitigated or explicitly deferred in `RISK_REGISTER.md`.
+- Full mobile checklist evidence exists, or each skipped item is explicitly accepted for the target release.
 
-## Month 2: Data Reliability And Account Boundaries
+## Month 2: Sync Activation And Data Reliability
 
-Goals:
+Status: schema-first code foundation is complete locally and defaults off.
 
-- Make local-first behavior explicit and safer.
-- Prepare for eventual multi-device restore without rushing a broad migration.
-
-Candidate work:
-
-- Storage versioning and decode fallback plan for `AppDatabase`.
-- User-isolation audit for providers and async write paths.
-- Supabase schema design for training programs and set-level progression context.
-- Sync conflict/error-handling strategy.
+- Apply and validate the additive Supabase migration in a disposable project.
+- Run RLS/FK, two-account restore, delete tombstone, rollback, and conflict smoke.
+- Decide whether latest-write-wins is adequate before enabling the feature flag.
+- Continue lower-risk storage versioning only after activation behavior is known.
 
 Exit criteria:
 
-- Data-layer changes have migration/rollback notes.
-- User switching and local/remote write paths have targeted tests or documented limitations.
+- Migration and rollback evidence is recorded.
+- The capability is either deliberately enabled or remains off with a documented blocker.
 
-## Month 3: Mobile Release Readiness
+## Month 3: Release Readiness
 
-Goals:
-
-- Prepare the app for real mobile distribution decisions.
-- Close production-only gaps before external release.
-
-Candidate work:
-
-- Production Pro entitlement verification.
-- Google/Apple login assessment and implementation plan.
-- CI improvements matching local gates.
-- APK/app size assessment and mobile release checklist.
+- Replace local Pro unlock with production entitlement verification when the deferred billing work resumes.
+- Assess Google/Apple login scope.
+- Recheck release APK size against the 23,255,260-byte arm64 baseline.
+- Exercise the updated CI/Pages workflow after an approved push.
+- Decide whether module splitting, dependency upgrades, and stronger storage transactions are required for the release.
 
 Exit criteria:
 
-- Release checklist exists and is followed.
-- Pro/OAuth/mobile packaging risks are either resolved or explicitly out of scope for the release.
+- Mobile smoke, entitlement, sync activation, CI, packaging, and rollback gates are explicitly passed or deferred by release decision.

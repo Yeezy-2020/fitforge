@@ -1,82 +1,81 @@
 # FitForge Quality Gates
 
-last_verified_commit: `71b38dfc3f8b`
-last_verified_date: `2026-07-09 UTC`
-
-These gates define the expected checks before committing, pushing, or deploying FitForge work.
+last_verified_commit: `18cb461`
+last_verified_date: `2026-07-15 UTC`
 
 ## Local Development
 
-- Use the repo Flutter binary when available: `/home/dyy/flutter/bin/flutter`.
-- For Flutter tests in this environment, set `NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1`.
-- New product behavior should include tests at the right level:
-  - model/formula/serialization: unit tests under `test/features/`
-  - screen rendering and button availability: widget tests under `test/screens/`
-  - visual regressions: golden tests where the screen already has golden coverage
-- Visible text changes must use `L10n` and include English and Chinese strings.
+- Use `/home/dyy/flutter/bin/flutter` when available.
+- Set `NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1` for Flutter tests on this host.
+- Run strict analysis for changed code: `/home/dyy/flutter/bin/flutter analyze --no-pub`. Analyzer infos and warnings are treated as work to fix, not a release baseline.
+- Match tests to risk: pure domain/unit tests, provider/storage tests, widget tests, and existing goldens.
+- Visible copy must use `L10n` with English and Chinese coverage.
+- Training copy must keep `test/features/training_program_wording_guard_test.dart` green.
 
-## Pre-Commit Gate
+## Focused Gates
 
-Run the smallest checks that cover the touched area:
+High-risk training/sync/auth changes should include the relevant subset of:
 
 ```bash
-/home/dyy/flutter/bin/flutter analyze --no-fatal-infos --no-fatal-warnings
-NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test test/features/training_program_test.dart
+NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test --no-pub test/core/services/workout_log_builder_test.dart
+NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test --no-pub test/core/services/training_program_editor_test.dart
+NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test --no-pub test/data/app_database_training_sync_outbox_test.dart
+NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test --no-pub test/core/services/sync_service_test.dart
+NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test --no-pub test/screens/auth_flow_test.dart
+NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 /home/dyy/flutter/bin/flutter test --no-pub test/screens/workout_day_user_scope_test.dart
 ```
 
-Use focused tests appropriate to the changed module. For doc-only changes, markdown review and git diff inspection are enough unless README claims test/analyzer status.
+Storage changes must preserve legacy reads, fail closed on corrupt/future/foreign-owner envelopes, avoid read-time rewrites, and prove unrelated bytes remain unchanged.
 
 ## Pre-Push Gate
 
-Use:
+Run:
 
 ```bash
 bash scripts/pre_push.sh
 ```
 
-The script currently runs:
+The script runs analyzer, the full Flutter test suite, widget dump smoke, and a dead-button scan. Any failure blocks push. Run strict `flutter analyze --no-pub` separately because the script currently passes non-fatal analyzer flags.
 
-- `flutter analyze --no-fatal-infos --no-fatal-warnings`
-- `flutter test`
-- widget dump smoke via `test/dump_test.dart --plain-name "pill"`
-- dead-button scan for `onPressed: () => {}`
+The 2026-07-13 stabilization batch passed locally:
 
-The script resolves Flutter in this order: `/home/dyy/flutter/bin/flutter`, `/opt/flutter/bin/flutter`, then `flutter` from `PATH`.
+- integrated focused suite: 86/86
+- final Workout account/single-flight suite: 11/11
+- strict analyzer: no issues
+- full `scripts/pre_push.sh`: all passed, including zero dead buttons
 
-It also sets `NO_PROXY` and `no_proxy` for `localhost,127.0.0.1` so Flutter test WebSocket traffic is not routed through external proxies in this environment.
+## Training-Sync Activation Gate
 
-Any failure blocks push.
+Static migration assertions and local mocks are not a real database migration test. Before enabling `FITFORGE_TRAINING_SYNC_V1`:
 
-## Delegation And Review
+1. Apply `supabase/migrations/202607130001_training_sync_foundation.sql` to a disposable Supabase/PostgreSQL project.
+2. Verify migration idempotence, constraints, indexes, triggers, RLS, and same-owner foreign keys.
+3. Run two-account upsert/delete/restore and offline enabled -> disabled -> enabled recovery smoke.
+4. Confirm legacy sync does not revive tombstones.
+5. Enable the flag only through an explicit release decision.
 
-- Non-trivial FitForge work should use `gpt-5.5/high` workers.
-- Each worker or reviewer must return the structured agent report required by the skill.
-- Independent review is required for training-program/progression, storage/sync, auth/user isolation, subscription/Pro, i18n-heavy UI, CI/deploy, and broad refactors.
-- Main Codex must verify findings against code before acting.
+## Android Build And Size
+
+- Build the current worktree; do not reuse an unknown APK.
+- Current-worktree 2026-07-15 release APK: `23,255,260` bytes (about 22.18 MiB), SHA-256 `a28477b6dfc4d8ed2f3eb1f5867b6ee3218d7e7da2fd74974f8c7ed9ef78fdc4`, package/version `com.fitforge.fitforge` 1.0.0 (1). It shares the debug signing certificate and is the preferred remote-smoke replacement artifact.
+- Current-worktree debug APK: `189,966,669` bytes, SHA-256 `8e8fdc453255a8b9409968d5181e21924467d81ecc999cfdf60b4d35bfd22171`. Do not stream this large artifact over the EasyTier phone path when the smaller same-signed release APK is available.
+- The ARM64 split artifact is slightly smaller but receives version code 2001; avoid installing it by default because returning to version-code 1 debug builds would require a downgrade path.
+- Largest packaged native artifacts observed: `libflutter.so` 11,579,920 bytes and `libapp.so` 8,848,272 bytes; `classes.dex` 4,953,236 bytes.
+- Record device model/API/resolution, install mode, artifact hash, and target-PID crash/ANR review for mobile smoke.
+- For remote-device replacement, preserve app data and account state: verify the
+  phone peer and ADB `device` state, prefer `adb install --no-streaming -r` with
+  the version-code 1 release APK, and never use uninstall or clear-data as a
+  smoke prerequisite.
+- 2026-07-15 Redmi K20 Pro / Android 11 LAN fast smoke used
+  `192.168.31.56:5555`. Install and cold launch passed, core TP happy paths
+  passed, and the final 61-line target-PID logcat had zero crash/ANR/Flutter
+  error matches. Remaining timeboxed/manual subcases stay release-gated in the
+  checklist and task report.
 
 ## CI And Deployment
 
-Current GitHub Actions workflow:
-
-- `.github/workflows/deploy.yml`
-- triggers on `push` to `main` and `workflow_dispatch`
-- runs `flutter pub get`, `flutter test`, and `flutter build web --release --base-href /fitforge/`
-- deploys the Web preview to GitHub Pages
-
-CI gaps to close:
-
-- add `flutter analyze --no-fatal-infos --no-fatal-warnings`
-- add dead-button scan or reuse equivalent `scripts/pre_push.sh` logic
-- consider PR checks before `main`
-- consider Flutter version pinning or documented stable-channel drift
-- keep Web/GitHub Pages as internal preview only; iOS/Android are the supported platforms
-
-## Deployment Follow-Up
-
-After an approved push or deploy:
-
-1. Confirm `origin/main` equals local `HEAD`.
-2. Check latest GitHub Actions run status.
-3. Verify Pages URL: `https://yeezy-2020.github.io/fitforge/`.
-4. Use the test account only for smoke checks already documented in the skill.
-5. Report commit, Actions/Pages status, and any blockers.
+- `.github/workflows/deploy.yml` now runs `bash scripts/pre_push.sh` before the Web preview build and Pages deployment.
+- Confirm the updated workflow in remote CI for every approved push before
+  treating the Pages preview or release gate as green.
+- Web/Pages remains an internal preview; Android/iOS are the supported product targets.
+- After an approved push, confirm `origin/main`, Actions, and `https://yeezy-2020.github.io/fitforge/` before reporting deployment complete.

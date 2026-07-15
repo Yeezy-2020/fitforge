@@ -1,31 +1,36 @@
 # FitForge Project Management Index
 
-last_verified_commit: `b8d3a28`
-last_verified_date: `2026-07-09 UTC`
+last_verified_commit: `18cb461`
+last_verified_date: `2026-07-15 UTC`
 owner_skill: `/home/dyy/.codex/skills/fitforge-general-contractor/SKILL.md`
 repo_path: `/home/dyy/fitforge`
 
-This directory is the local server-side project management knowledge base for FitForge. Treat it as a versioned snapshot layer, not as the primary source of truth. Code, tests, git state, and command output remain authoritative.
+This directory is FitForge's versioned project-management knowledge base. Live code, tests, git state, and command output remain authoritative.
 
 ## Document Inventory
 
-- `INDEX.md`: entry point, document inventory, and verification metadata.
-- `ROADMAP.md`: planned 1-3 month product direction and active epics.
-- `BACKLOG.md`: feature, bug, and tech-debt queues.
-- `MODULE_MAP.md`: module ownership, complexity, and boundaries.
+- `ROADMAP.md`: planned 1-3 month direction and active epics.
+- `BACKLOG.md`: prioritized feature, release, and technical-debt queue.
+- `MODULE_MAP.md`: module responsibilities, boundaries, and size signals.
 - `DECISION_LOG.md`: durable product and architecture decisions.
-- `QUALITY_GATES.md`: validation, review, release, and deployment gates.
-- `RISK_REGISTER.md`: active risks, mitigations, and owners.
-- `TRAINING_PROGRAM_SMOKE_CHECKLIST.md`: repeatable mobile manual smoke checklist for training-program flows.
-- `task-reports/`: consolidated reports for non-trivial tasks and delegated worker outputs.
+- `QUALITY_GATES.md`: local, CI, release, and deployment gates.
+- `RISK_REGISTER.md`: active and mitigated product/engineering risks.
+- `TRAINING_PROGRAM_SMOKE_CHECKLIST.md`: repeatable mobile training-program smoke checklist.
+- `task-reports/`: consolidated reports for non-trivial tasks and delegated work.
 
 ## Current Task Reports
 
-- `task-reports/2026-07-09-project-governance-bootstrap.md`: initial project-management knowledge-base bootstrap and README drift cleanup.
-- `task-reports/2026-07-09-training-program-smoke-and-cycle-wording.md`: training-program smoke checklist plus cycle-neutral progression model cleanup.
-- `task-reports/2026-07-09-long-gap-backlog-audit.md`: long-gap recovery prompt implementation audit and backlog correction.
-- `task-reports/2026-07-09-long-gap-provider-regression-tests.md`: provider-level long-gap recovery regression tests.
-- `task-reports/2026-07-09-long-gap-widget-regression-tests.md`: widget/dialog regression tests for long-gap recovery UI.
+- `task-reports/2026-07-09-project-governance-bootstrap.md`
+- `task-reports/2026-07-09-training-program-smoke-and-cycle-wording.md`
+- `task-reports/2026-07-09-long-gap-backlog-audit.md`
+- `task-reports/2026-07-09-long-gap-provider-regression-tests.md`
+- `task-reports/2026-07-09-long-gap-widget-regression-tests.md`
+- `task-reports/2026-07-10-mobile-smoke-readiness-and-cycle-wording-guard.md`
+- `task-reports/2026-07-10-training-program-screen-split.md`
+- `task-reports/2026-07-13-android-smoke-bootstrap.md`
+- `task-reports/2026-07-13-training-program-storage-versioning.md`
+- `task-reports/2026-07-13-p1-stabilization-and-sync-foundation.md`
+- `task-reports/2026-07-15-real-device-smoke-retry.md`
 
 ## Source Of Truth Order
 
@@ -34,21 +39,27 @@ This directory is the local server-side project management knowledge base for Fi
 3. `HANDOFF.md` temporary conversation handoff.
 4. Worker summaries and chat history.
 
-When using any document here, verify whether relevant files changed after its `last_verified_commit`.
+## Current Local State
+
+- Branch: `main`.
+- Local `HEAD` and `origin/main`: `18cb461` (`Add long-gap recovery widget tests`).
+- The current approved batch includes the P1 stabilization, training-sync
+  foundation, and LAN mobile-smoke records. Training sync remains default-off
+  and the database migration has not been deployed.
+- The last checked Actions run and Pages deployment for `18cb461` were green;
+  every approved push must be checked independently before reporting deployment.
+- Training sync remains capability-gated with `FITFORGE_TRAINING_SYNC_V1=false` by default.
+- `supabase/migrations/202607130001_training_sync_foundation.sql` exists locally but has not been applied to a real Supabase/PostgreSQL environment.
+- The 2026-07-15 real-device retry recovered through LAN
+  `192.168.31.56:5555`, installed the same-signed 23.3 MB release APK with data
+  preserved, and completed a timeboxed TP-01 through TP-13 smoke. No product
+  defect or crash was found in the executed paths; exhaustive manual subcases
+  remain documented in the task report and checklist.
+- Production Pro entitlement work remains explicitly deferred.
+- `HANDOFF.md` remains an ignored temporary artifact.
 
 ## Update Rules
 
-- Ordinary non-trivial code task: add or update one task report under `task-reports/`.
-- Architecture or product-direction change: update `DECISION_LOG.md`.
-- New or changed risk: update `RISK_REGISTER.md`.
-- Release, test, review, or deployment process change: update `QUALITY_GATES.md`.
-- New module or large module reshaping: update `MODULE_MAP.md`.
-- Roadmap or prioritization change: update `ROADMAP.md` or `BACKLOG.md`.
-
-Do not store secrets, private credentials, one-time device codes, raw environment dumps, or long-form model reasoning in this directory.
-
-## Current Local State
-
-- Current branch was last observed as `main`, ahead of `origin/main` by 5 local commits before this task's commit.
-- `HANDOFF.md` is ignored and treated as a temporary local handoff artifact.
-- Latest local commit before this task: `b8d3a28` (`Add long-gap recovery provider tests`).
+- Add a task report for non-trivial work.
+- Update architecture decisions, risks, quality gates, module boundaries, and priorities in their matching documents.
+- Never store credentials, pairing codes, raw environment dumps, or long-form model reasoning here.

@@ -18,6 +18,12 @@ String _newId() {
 
 int _idSeq = 0;
 
+class _TrainingProgramMutation {
+  final UserScope userScope;
+
+  const _TrainingProgramMutation({required this.userScope});
+}
+
 String exerciseName(String id, List<Exercise> exercises) {
   final ex = exercises.where((e) => e.id == id).firstOrNull;
   if (ex == null) return id;
@@ -69,7 +75,20 @@ class _TrainingProgramsScreenState
       ),
       body: programsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('${l10n.get('failedToLoad')}: $e')),
+        error: (_, _) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.get('failedToLoad')),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => ref.invalidate(trainingProgramsProvider),
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.get('retry')),
+              ),
+            ],
+          ),
+        ),
         data: (programs) {
           if (programs.isEmpty) {
             return Center(
@@ -119,8 +138,8 @@ class _TrainingProgramsScreenState
 
   Future<void> _createBlank() async {
     final l10n = ref.read(l10nProvider);
-    final userId = ref.read(currentUserIdProvider);
-    if (userId.isEmpty) return;
+    final mutation = _captureMutation();
+    if (mutation == null) return;
 
     final settings = await showProgramSettingsDialog(
       context: context,
@@ -131,11 +150,13 @@ class _TrainingProgramsScreenState
       confirmLabel: l10n.get('createProgram'),
     );
     if (settings == null) return;
+    if (!mounted) return;
+    if (!_isCurrentMutation(mutation)) return;
 
     final now = DateTime.now();
     final program = TrainingProgram(
       id: _newId(),
-      userId: userId,
+      userId: mutation.userScope.userId,
       name: settings.name,
       active: false,
       activatedAt: null,
@@ -146,6 +167,7 @@ class _TrainingProgramsScreenState
     );
     await ref.read(trainingProgramsProvider.notifier).save(program);
     if (!mounted) return;
+    if (!_isCurrentMutation(mutation)) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.get('blankProgramCreated'))));
@@ -154,8 +176,8 @@ class _TrainingProgramsScreenState
 
   Future<void> _createStarter() async {
     final l10n = ref.read(l10nProvider);
-    final userId = ref.read(currentUserIdProvider);
-    if (userId.isEmpty) return;
+    final mutation = _captureMutation();
+    if (mutation == null) return;
     final settings = await showProgramSettingsDialog(
       context: context,
       l10n: l10n,
@@ -166,10 +188,12 @@ class _TrainingProgramsScreenState
       dayCount: 4,
     );
     if (settings == null) return;
+    if (!mounted) return;
+    if (!_isCurrentMutation(mutation)) return;
     final now = DateTime.now();
     final program = TrainingProgram(
       id: _newId(),
-      userId: userId,
+      userId: mutation.userScope.userId,
       name: settings.name,
       active: false,
       activatedAt: null,
@@ -248,16 +272,18 @@ class _TrainingProgramsScreenState
       ],
     );
     await ref.read(trainingProgramsProvider.notifier).save(program);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.get('starterProgramCreated'))),
-      );
-      _openDetail(program.id);
-    }
+    if (!mounted) return;
+    if (!_isCurrentMutation(mutation)) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.get('starterProgramCreated'))));
+    _openDetail(program.id);
   }
 
   Future<void> _renameProgram(TrainingProgram program) async {
     final l10n = ref.read(l10nProvider);
+    final mutation = _captureMutation(expectedUserId: program.userId);
+    if (mutation == null) return;
     final settings = await showProgramSettingsDialog(
       context: context,
       l10n: l10n,
@@ -267,6 +293,8 @@ class _TrainingProgramsScreenState
       dayCount: program.days.length,
     );
     if (settings == null) return;
+    if (!mounted) return;
+    if (!_isCurrentMutation(mutation)) return;
     final updated = program.copyWith(
       name: settings.name,
       plannedCycleCount: settings.plannedCycleCount,
@@ -278,12 +306,16 @@ class _TrainingProgramsScreenState
 
   Future<void> _setActive(TrainingProgram program) async {
     final l10n = ref.read(l10nProvider);
+    final mutation = _captureMutation(expectedUserId: program.userId);
+    if (mutation == null) return;
     final config = await showProgramActivationDialog(
       context: context,
       l10n: l10n,
       program: program,
     );
     if (config == null) return;
+    if (!mounted) return;
+    if (!_isCurrentMutation(mutation)) return;
     await ref
         .read(trainingProgramsProvider.notifier)
         .setActive(
@@ -296,6 +328,8 @@ class _TrainingProgramsScreenState
 
   Future<void> _deleteProgram(TrainingProgram program) async {
     final l10n = ref.read(l10nProvider);
+    final mutation = _captureMutation(expectedUserId: program.userId);
+    if (mutation == null) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -317,10 +351,27 @@ class _TrainingProgramsScreenState
       ),
     );
     if (confirm == true) {
+      if (!mounted) return;
+      if (!_isCurrentMutation(mutation)) return;
       await ref
           .read(trainingProgramsProvider.notifier)
           .delete(program.id, expectedUserId: program.userId);
     }
+  }
+
+  _TrainingProgramMutation? _captureMutation({String? expectedUserId}) {
+    final userScope = ref.read(currentUserScopeProvider);
+    if (userScope.userId.isEmpty ||
+        (expectedUserId != null && userScope.userId != expectedUserId)) {
+      return null;
+    }
+    return _TrainingProgramMutation(userScope: userScope);
+  }
+
+  bool _isCurrentMutation(_TrainingProgramMutation mutation) {
+    final currentScope = ref.read(currentUserScopeProvider);
+    return identical(currentScope, mutation.userScope) &&
+        currentScope.userId == mutation.userScope.userId;
   }
 }
 

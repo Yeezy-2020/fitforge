@@ -1198,6 +1198,7 @@ class WorkoutSetLog {
   final String id;
   final String workoutLogId;
   final String programId;
+  final String? programDayId;
   final String programExerciseId;
   final int setIndex;
   final int reps;
@@ -1208,6 +1209,7 @@ class WorkoutSetLog {
     required this.id,
     required this.workoutLogId,
     required this.programId,
+    this.programDayId,
     required this.programExerciseId,
     required this.setIndex,
     required this.reps,
@@ -1219,6 +1221,7 @@ class WorkoutSetLog {
     id: json['id'] as String,
     workoutLogId: json['workoutLogId'] as String,
     programId: json['programId'] as String,
+    programDayId: json['programDayId'] as String?,
     programExerciseId: json['programExerciseId'] as String,
     setIndex: json['setIndex'] as int,
     reps: json['reps'] as int,
@@ -1230,6 +1233,7 @@ class WorkoutSetLog {
     'id': id,
     'workoutLogId': workoutLogId,
     'programId': programId,
+    if (programDayId != null) 'programDayId': programDayId,
     'programExerciseId': programExerciseId,
     'setIndex': setIndex,
     'reps': reps,
@@ -1241,15 +1245,18 @@ class WorkoutSetLog {
     String? id,
     String? workoutLogId,
     String? programId,
+    String? programDayId,
     String? programExerciseId,
     int? setIndex,
     int? reps,
     double? weightKg,
     bool? completed,
+    bool clearProgramDayId = false,
   }) => WorkoutSetLog(
     id: id ?? this.id,
     workoutLogId: workoutLogId ?? this.workoutLogId,
     programId: programId ?? this.programId,
+    programDayId: clearProgramDayId ? null : programDayId ?? this.programDayId,
     programExerciseId: programExerciseId ?? this.programExerciseId,
     setIndex: setIndex ?? this.setIndex,
     reps: reps ?? this.reps,

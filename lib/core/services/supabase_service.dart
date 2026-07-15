@@ -1,8 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../data/models/progression_rule.dart';
+import '../../data/models/training_program.dart';
 import '../../data/models/workout_log.dart';
 import '../../data/models/food.dart';
 import '../../data/models/diet_log.dart';
 import '../../data/models/user_profile.dart';
+import 'sync_row_codec.dart';
 
 class SupabaseService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -22,34 +26,9 @@ class SupabaseService {
     source: r['source'] as String?,
   );
 
-  Map<String, dynamic> _workoutToRow(WorkoutLog w) => {
-    'id': w.id,
-    'user_id': userId,
-    'exercise_id': w.exerciseId,
-    'date': w.date.toIso8601String().substring(0, 10),
-    'sets': w.sets,
-    'reps': w.reps,
-    'weight_kg': w.weightKg,
-    'note': w.note,
-  };
-
-  WorkoutLog _workoutFromRow(Map<String, dynamic> r) => WorkoutLog(
-    id: r['id'] as String,
-    userId: r['user_id'] as String,
-    exerciseId: r['exercise_id'] as String,
-    date: DateTime.parse(r['date'] as String),
-    sets: r['sets'] as int,
-    reps: r['reps'] as int,
-    weightKg: (r['weight_kg'] as num).toDouble(),
-    note: r['note'] as String?,
-    createdAt: r['created_at'] != null
-        ? DateTime.parse(r['created_at'] as String)
-        : null,
-  );
-
-  Map<String, dynamic> _dietToRow(DietLog d) => {
+  Map<String, dynamic> _dietToRow(DietLog d, {String? ownerUserId}) => {
     'id': d.id,
-    'user_id': userId,
+    'user_id': ownerUserId ?? userId,
     'food_id': d.foodId,
     'date': d.date.toIso8601String().substring(0, 10),
     'meal_type': d.mealType.name,
@@ -119,8 +98,12 @@ class SupabaseService {
   Future<UserProfile?> getProfile() async {
     final uid = userId;
     if (uid == null) return null;
-    final data = await _client.from('profiles').select().eq('id', uid).single();
-    return _profileFromRow(data);
+    final data = await _client
+        .from('profiles')
+        .select()
+        .eq('id', uid)
+        .maybeSingle();
+    return data == null ? null : _profileFromRow(data);
   }
 
   Future<void> upsertProfile(UserProfile profile) async {
@@ -167,7 +150,14 @@ class SupabaseService {
         .select()
         .eq('user_id', uid)
         .eq('date', dateStr);
-    return (response as List).map((e) => _workoutFromRow(e)).toList();
+    return (response as List)
+        .map(
+          (row) => SyncRowCodec.workoutLogFromRow(
+            Map<String, dynamic>.from(row as Map),
+            currentUserId: uid,
+          ),
+        )
+        .toList();
   }
 
   Future<List<WorkoutLog>> getWorkoutLogsForMonth(DateTime month) async {
@@ -182,15 +172,276 @@ class SupabaseService {
         .eq('user_id', uid)
         .gte('date', start)
         .lte('date', end);
-    return (response as List).map((e) => _workoutFromRow(e)).toList();
+    return (response as List)
+        .map(
+          (row) => SyncRowCodec.workoutLogFromRow(
+            Map<String, dynamic>.from(row as Map),
+            currentUserId: uid,
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<WorkoutLog>> getAllWorkoutLogs({int pageSize = 500}) async {
+    final uid = userId;
+    if (uid == null) return [];
+    final rows = await _getAllOwnedRows(
+      'workout_logs',
+      userId: uid,
+      pageSize: pageSize,
+    );
+    return rows
+        .map((row) => SyncRowCodec.workoutLogFromRow(row, currentUserId: uid))
+        .toList();
   }
 
   Future<void> addWorkoutLog(WorkoutLog log) async {
-    await _client.from('workout_logs').upsert(_workoutToRow(log));
+    final uid = _requireAuthenticatedUser();
+    final row = SyncRowCodec.workoutLogToLegacyRow(log, currentUserId: uid);
+    await _client.from('workout_logs').upsert(row);
+  }
+
+  Future<void> addWorkoutLogForSync(
+    WorkoutLog log, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    final row = SyncRowCodec.workoutLogToLegacyRow(
+      log,
+      currentUserId: expectedUserId,
+    );
+    await _client.from('workout_logs').upsert(row);
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  /// Requires `202607130001_training_sync_foundation.sql` to be deployed.
+  /// Keep normal workout writes on [addWorkoutLog] until then.
+  Future<void> upsertWorkoutLog(WorkoutLog log) async {
+    final uid = _requireAuthenticatedUser();
+    final row = SyncRowCodec.workoutLogToRow(log, currentUserId: uid);
+    await _client.from('workout_logs').upsert(row);
+  }
+
+  Future<void> upsertWorkoutLogForSync(
+    WorkoutLog log, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    final row = SyncRowCodec.workoutLogToRow(
+      log,
+      currentUserId: expectedUserId,
+    );
+    await _client.from('workout_logs').upsert(row);
+    _requireExpectedAuthenticatedUser(expectedUserId);
   }
 
   Future<void> deleteWorkoutLog(String logId) async {
-    await _client.from('workout_logs').delete().eq('id', logId);
+    final uid = _requireAuthenticatedUser();
+    await _client
+        .from('workout_logs')
+        .delete()
+        .eq('user_id', uid)
+        .eq('id', logId);
+  }
+
+  Future<void> deleteWorkoutLogForSync(
+    String logId, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    await _client
+        .from('workout_logs')
+        .delete()
+        .eq('user_id', expectedUserId)
+        .eq('id', logId);
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  // ---- Training sync foundation ----
+  // SyncService calls these only when FITFORGE_TRAINING_SYNC_V1 is enabled and
+  // the matching migration has already been deployed.
+  Future<List<TrainingProgram>> getAllTrainingPrograms({
+    int pageSize = 500,
+  }) async {
+    final uid = userId;
+    if (uid == null) return [];
+    final rows = await _getAllOwnedRows(
+      'training_programs',
+      userId: uid,
+      pageSize: pageSize,
+    );
+    return rows
+        .map(
+          (row) => SyncRowCodec.trainingProgramFromRow(row, currentUserId: uid),
+        )
+        .toList();
+  }
+
+  Future<void> upsertTrainingProgram(TrainingProgram program) async {
+    final uid = _requireAuthenticatedUser();
+    final row = SyncRowCodec.trainingProgramToRow(program, currentUserId: uid);
+    await _client
+        .from('training_programs')
+        .upsert(row, onConflict: 'user_id,id');
+  }
+
+  Future<void> upsertTrainingProgramForSync(
+    TrainingProgram program, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    final row = SyncRowCodec.trainingProgramToRow(
+      program,
+      currentUserId: expectedUserId,
+    );
+    await _client
+        .from('training_programs')
+        .upsert(row, onConflict: 'user_id,id');
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  Future<void> deleteTrainingProgram(String programId) async {
+    final uid = _requireAuthenticatedUser();
+    await _client
+        .from('training_programs')
+        .delete()
+        .eq('user_id', uid)
+        .eq('id', programId);
+  }
+
+  Future<void> deleteTrainingProgramForSync(
+    String programId, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    await _client
+        .from('training_programs')
+        .delete()
+        .eq('user_id', expectedUserId)
+        .eq('id', programId);
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  Future<List<ProgressionRule>> getAllProgressionRules({
+    int pageSize = 500,
+  }) async {
+    final uid = userId;
+    if (uid == null) return [];
+    final rows = await _getAllOwnedRows(
+      'progression_rules',
+      userId: uid,
+      pageSize: pageSize,
+    );
+    return rows
+        .map(
+          (row) => SyncRowCodec.progressionRuleFromRow(row, currentUserId: uid),
+        )
+        .toList();
+  }
+
+  Future<void> upsertProgressionRule(ProgressionRule rule) async {
+    final uid = _requireAuthenticatedUser();
+    final row = SyncRowCodec.progressionRuleToRow(rule, currentUserId: uid);
+    await _client
+        .from('progression_rules')
+        .upsert(row, onConflict: 'user_id,id');
+  }
+
+  Future<void> upsertProgressionRuleForSync(
+    ProgressionRule rule, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    final row = SyncRowCodec.progressionRuleToRow(
+      rule,
+      currentUserId: expectedUserId,
+    );
+    await _client
+        .from('progression_rules')
+        .upsert(row, onConflict: 'user_id,id');
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  Future<void> deleteProgressionRule(String ruleId) async {
+    final uid = _requireAuthenticatedUser();
+    await _client
+        .from('progression_rules')
+        .delete()
+        .eq('user_id', uid)
+        .eq('id', ruleId);
+  }
+
+  Future<void> deleteProgressionRuleForSync(
+    String ruleId, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    await _client
+        .from('progression_rules')
+        .delete()
+        .eq('user_id', expectedUserId)
+        .eq('id', ruleId);
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  Future<List<WorkoutSetLog>> getAllWorkoutSetLogs({int pageSize = 500}) async {
+    final uid = userId;
+    if (uid == null) return [];
+    final rows = await _getAllOwnedRows(
+      'workout_set_logs',
+      userId: uid,
+      pageSize: pageSize,
+    );
+    return rows
+        .map(
+          (row) => SyncRowCodec.workoutSetLogFromRow(row, currentUserId: uid),
+        )
+        .toList();
+  }
+
+  Future<void> upsertWorkoutSetLog(WorkoutSetLog log) async {
+    final uid = _requireAuthenticatedUser();
+    final row = SyncRowCodec.workoutSetLogToRow(log, currentUserId: uid);
+    await _client
+        .from('workout_set_logs')
+        .upsert(row, onConflict: 'user_id,id');
+  }
+
+  Future<void> upsertWorkoutSetLogForSync(
+    WorkoutSetLog log, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    final row = SyncRowCodec.workoutSetLogToRow(
+      log,
+      currentUserId: expectedUserId,
+    );
+    await _client
+        .from('workout_set_logs')
+        .upsert(row, onConflict: 'user_id,id');
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
+  Future<void> deleteWorkoutSetLog(String setLogId) async {
+    final uid = _requireAuthenticatedUser();
+    await _client
+        .from('workout_set_logs')
+        .delete()
+        .eq('user_id', uid)
+        .eq('id', setLogId);
+  }
+
+  Future<void> deleteWorkoutSetLogForSync(
+    String setLogId, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    await _client
+        .from('workout_set_logs')
+        .delete()
+        .eq('user_id', expectedUserId)
+        .eq('id', setLogId);
+    _requireExpectedAuthenticatedUser(expectedUserId);
   }
 
   // ---- Diet Logs ----
@@ -210,8 +461,35 @@ class SupabaseService {
     await _client.from('diet_logs').upsert(_dietToRow(log));
   }
 
+  Future<void> addDietLogForSync(
+    DietLog log, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    if (log.userId != expectedUserId) {
+      throw StateError('Diet log belongs to a different sync user.');
+    }
+    await _client
+        .from('diet_logs')
+        .upsert(_dietToRow(log, ownerUserId: expectedUserId));
+    _requireExpectedAuthenticatedUser(expectedUserId);
+  }
+
   Future<void> deleteDietLog(String logId) async {
     await _client.from('diet_logs').delete().eq('id', logId);
+  }
+
+  Future<void> deleteDietLogForSync(
+    String logId, {
+    required String expectedUserId,
+  }) async {
+    _requireExpectedAuthenticatedUser(expectedUserId);
+    await _client
+        .from('diet_logs')
+        .delete()
+        .eq('user_id', expectedUserId)
+        .eq('id', logId);
+    _requireExpectedAuthenticatedUser(expectedUserId);
   }
 
   // ---- Subscription ----
@@ -225,5 +503,51 @@ class SupabaseService {
         .single();
     final tier = response['tier'] as String;
     return tier == 'pro_monthly' || tier == 'pro_yearly';
+  }
+
+  String _requireAuthenticatedUser() {
+    final uid = userId;
+    if (uid == null || uid.isEmpty) {
+      throw StateError('A signed-in user is required for this write.');
+    }
+    return uid;
+  }
+
+  void _requireExpectedAuthenticatedUser(String expectedUserId) {
+    final uid = _requireAuthenticatedUser();
+    if (uid != expectedUserId) {
+      throw StateError(
+        'Authenticated user changed during sync: expected $expectedUserId, '
+        'found $uid.',
+      );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getAllOwnedRows(
+    String table, {
+    required String userId,
+    required int pageSize,
+  }) async {
+    if (pageSize <= 0 || pageSize > 1000) {
+      throw RangeError.range(pageSize, 1, 1000, 'pageSize');
+    }
+
+    final rows = <Map<String, dynamic>>[];
+    var offset = 0;
+    while (true) {
+      final response = await _client
+          .from(table)
+          .select()
+          .eq('user_id', userId)
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+      final page = (response as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      rows.addAll(page);
+      if (page.length < pageSize) break;
+      offset += page.length;
+    }
+    return rows;
   }
 }

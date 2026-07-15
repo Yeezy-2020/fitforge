@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:convert';
 import '../../../data/models/diet_log.dart';
@@ -66,10 +65,10 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Save Meal Template'),
+        title: Text(l10n.get('saveMealTemplate')),
         content: TextField(
           controller: nameCtrl,
-          decoration: const InputDecoration(hintText: 'Template name'),
+          decoration: InputDecoration(hintText: l10n.get('templateName')),
         ),
         actions: [
           TextButton(
@@ -83,32 +82,34 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
         ],
       ),
     );
+    nameCtrl.dispose();
     if (name == null || name.isEmpty) return;
     final userId = ref.read(currentUserIdProvider);
     final data = logs.map((l) => l.toJson()).toList();
     final json = jsonEncode({'name': name, 'items': data});
     await AppDatabase.instance.saveMealTemplate(userId, name, json);
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Template "$name" saved')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.format('templateSaved', {'name': name}))),
+      );
     }
   }
 
   void _loadMealTemplate() async {
+    final l10n = ref.read(l10nProvider);
     final userId = ref.read(currentUserIdProvider);
     final templates = await AppDatabase.instance.getMealTemplates(userId);
     if (!mounted) return;
     if (templates.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('No templates saved')));
+      ).showSnackBar(SnackBar(content: Text(l10n.get('noTemplatesSaved'))));
       return;
     }
     final selected = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Meal Templates'),
+        title: Text(l10n.get('mealTemplates')),
         children: templates
             .map(
               (t) => SimpleDialogOption(
@@ -158,9 +159,15 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Template applied')));
+          ).showSnackBar(SnackBar(content: Text(l10n.get('templateApplied'))));
         }
-      } catch (_) {}
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.get('failedToLoad'))));
+        }
+      }
     }
   }
 
@@ -200,7 +207,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
         leading: logs.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.bookmark_add_outlined, size: 20),
-                tooltip: 'Save',
+                tooltip: l10n.get('saveMealTemplateTooltip'),
                 onPressed: () => _saveMealTemplate(logs),
               )
             : null,
@@ -217,7 +224,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
               },
             ),
             Text(
-              '${DateFormat('MMM d').format(selectedDate)} ${l10n.get('diet')}',
+              '${l10n.shortDate(selectedDate)} ${l10n.get('diet')}',
               style: const TextStyle(fontSize: 16),
             ),
             IconButton(
@@ -232,7 +239,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
         ),
         actions: [
           _todayBtn(
-            text: 'Today',
+            text: l10n.get('todayLabel'),
             onTap: () {
               final today = DateTime.now();
               ref.read(selectedDateProvider.notifier).state = today;
@@ -241,7 +248,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
           ),
           IconButton(
             icon: const Icon(Icons.bookmark_outline, size: 20),
-            tooltip: 'Load',
+            tooltip: l10n.get('loadMealTemplateTooltip'),
             onPressed: _loadMealTemplate,
           ),
         ],
@@ -393,7 +400,7 @@ class _DietLogScreenState extends ConsumerState<DietLogScreen>
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         labelText: l10n.get('weightG'),
-                        hintText: 'e.g. 200',
+                        hintText: l10n.get('gramsExample'),
                         errorText: gramError
                             ? l10n.get('pleaseEnterValid')
                             : null,

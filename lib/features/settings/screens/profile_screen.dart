@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/localization/l10n.dart';
 import '../../../data/models/user_profile.dart';
 import '../../../providers/app_providers.dart';
 import '../../../providers/settings_providers.dart';
@@ -64,19 +65,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    final l10n = ref.read(l10nProvider);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
+        title: Text(l10n.get('logOut')),
+        content: Text(l10n.get('logOutConfirm')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.get('cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Log Out'),
+            child: Text(l10n.get('logOut')),
           ),
         ],
       ),
@@ -89,22 +91,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    final l10n = ref.read(l10nProvider);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text(
-          'Account deletion requires a server-side flow and is not available in this development build yet.',
-        ),
+        title: Text(l10n.get('deleteAccount')),
+        content: Text(l10n.get('accountDeletionUnavailableBody')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.get('cancel')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('OK'),
+            child: Text(l10n.get('ok')),
           ),
         ],
       ),
@@ -112,7 +113,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (confirm == true) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account deletion is not available yet')),
+        SnackBar(content: Text(l10n.get('accountDeletionUnavailable'))),
       );
     }
   }
@@ -129,11 +130,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: l10n.get('openSettings'),
             onPressed: () => context.push('/settings'),
           ),
           if (!_editing)
             IconButton(
               icon: const Icon(Icons.edit),
+              tooltip: l10n.get('editProfile'),
               onPressed: () => setState(() => _editing = true),
             )
           else
@@ -143,7 +146,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: profileAsync.when(
         data: (profile) {
           if (profile == null) {
-            return const Center(child: Text('暂无数据'));
+            return Center(child: Text(l10n.get('noData')));
           }
 
           return ListView(
@@ -166,7 +169,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        profile.email ?? 'No email',
+                        profile.email ?? l10n.get('noEmail'),
                         style: theme.textTheme.titleMedium,
                       ),
                       if (profile.displayName != null)
@@ -189,28 +192,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Body Data', style: theme.textTheme.titleSmall),
+                      Text(
+                        l10n.get('bodyData'),
+                        style: theme.textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 12),
                       if (_editing) ...[
-                        _buildEditFields(theme),
+                        _buildEditFields(l10n),
                       ] else ...[
                         _buildReadRow(
-                          'Gender',
-                          profile.gender == Gender.male ? 'Male' : 'Female',
+                          l10n.get('gender'),
+                          profile.gender == Gender.male
+                              ? l10n.get('male')
+                              : l10n.get('female'),
                         ),
-                        _buildReadRow('Age', '${profile.age} yrs'),
                         _buildReadRow(
-                          'Height',
+                          l10n.get('age'),
+                          '${profile.age} ${l10n.get('yrs')}',
+                        ),
+                        _buildReadRow(
+                          l10n.get('height'),
                           '${profile.heightCm.toStringAsFixed(0)} cm',
                         ),
                         _buildReadRow(
-                          'Weight',
+                          l10n.get('weight'),
                           '${profile.weightKg.toStringAsFixed(1)} kg',
                         ),
-                        _buildReadRow('Goal', _goalLabel(profile.goal)),
+                        _buildReadRow(
+                          l10n.get('goal'),
+                          _goalLabel(l10n, profile.goal),
+                        ),
                         if (profile.bodyFatPct != null)
                           _buildReadRow(
-                            'Body Fat',
+                            l10n.get('bodyFat'),
                             '${profile.bodyFatPct!.toStringAsFixed(1)}%',
                           ),
                       ],
@@ -222,7 +236,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
               ListTile(
                 leading: const Icon(Icons.straighten),
-                title: const Text('Body Measurements'),
+                title: Text(l10n.get('bodyMeasurements')),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/body'),
               ),
@@ -237,10 +251,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Plan', style: theme.textTheme.titleSmall),
+                          Text(
+                            l10n.get('plan'),
+                            style: theme.textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 4),
                           Text(
-                            ref.watch(isProProvider) ? 'FitForge Pro' : 'Free',
+                            ref.watch(isProProvider)
+                                ? l10n.get('pro')
+                                : l10n.get('free'),
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: ref.watch(isProProvider)
                                   ? theme.colorScheme.primary
@@ -254,7 +273,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       if (!ref.watch(isProProvider))
                         FilledButton.tonal(
                           onPressed: () => context.push('/paywall'),
-                          child: const Text('Upgrade'),
+                          child: Text(l10n.get('upgrade')),
                         ),
                     ],
                   ),
@@ -266,7 +285,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               OutlinedButton.icon(
                 onPressed: _logout,
                 icon: const Icon(Icons.logout, color: Colors.red),
-                label: const Text('Log Out'),
+                label: Text(l10n.get('logOut')),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.red,
                   side: const BorderSide(color: Colors.red),
@@ -278,7 +297,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               TextButton.icon(
                 onPressed: _deleteAccount,
                 icon: const Icon(Icons.delete_forever, color: Colors.red),
-                label: const Text('Delete Account'),
+                label: Text(l10n.get('deleteAccount')),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
               ),
               const SizedBox(height: 32),
@@ -286,7 +305,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, e) => Center(child: Text('加载失败: $e')),
+        error: (_, _) => Center(child: Text(l10n.get('failedToLoad'))),
       ),
     );
   }
@@ -309,13 +328,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildEditFields(ThemeData theme) {
+  Widget _buildEditFields(L10n l10n) {
     return Column(
       children: [
         SegmentedButton<Gender>(
-          segments: const [
-            ButtonSegment(value: Gender.male, label: Text('Male')),
-            ButtonSegment(value: Gender.female, label: Text('Female')),
+          segments: [
+            ButtonSegment(value: Gender.male, label: Text(l10n.get('male'))),
+            ButtonSegment(
+              value: Gender.female,
+              label: Text(l10n.get('female')),
+            ),
           ],
           selected: {_gender},
           onSelectionChanged: (v) => setState(() => _gender = v.first),
@@ -324,9 +346,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         TextField(
           controller: _ageCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Age',
-            suffixText: 'yrs',
+          decoration: InputDecoration(
+            labelText: l10n.get('age'),
+            suffixText: l10n.get('yrs'),
             isDense: true,
           ),
         ),
@@ -334,8 +356,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         TextField(
           controller: _heightCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Height',
+          decoration: InputDecoration(
+            labelText: l10n.get('height'),
             suffixText: 'cm',
             isDense: true,
           ),
@@ -344,8 +366,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         TextField(
           controller: _weightCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Weight',
+          decoration: InputDecoration(
+            labelText: l10n.get('weight'),
             suffixText: 'kg',
             isDense: true,
           ),
@@ -354,18 +376,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         TextField(
           controller: _bodyFatCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Body Fat',
+          decoration: InputDecoration(
+            labelText: l10n.get('bodyFat'),
             suffixText: '%',
             isDense: true,
           ),
         ),
         const SizedBox(height: 12),
         SegmentedButton<FitnessGoal>(
-          segments: const [
-            ButtonSegment(value: FitnessGoal.loseFat, label: Text('Cut')),
-            ButtonSegment(value: FitnessGoal.buildMuscle, label: Text('Bulk')),
-            ButtonSegment(value: FitnessGoal.maintain, label: Text('Maintain')),
+          segments: [
+            ButtonSegment(
+              value: FitnessGoal.loseFat,
+              label: Text(l10n.get('cut')),
+            ),
+            ButtonSegment(
+              value: FitnessGoal.buildMuscle,
+              label: Text(l10n.get('bulk')),
+            ),
+            ButtonSegment(
+              value: FitnessGoal.maintain,
+              label: Text(l10n.get('maintain')),
+            ),
           ],
           selected: {_goal},
           onSelectionChanged: (v) => setState(() => _goal = v.first),
@@ -374,14 +405,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  String _goalLabel(FitnessGoal g) {
+  String _goalLabel(L10n l10n, FitnessGoal g) {
     switch (g) {
       case FitnessGoal.loseFat:
-        return 'Cut';
+        return l10n.get('cut');
       case FitnessGoal.buildMuscle:
-        return 'Bulk';
+        return l10n.get('bulk');
       case FitnessGoal.maintain:
-        return 'Maintain';
+        return l10n.get('maintain');
     }
   }
 }

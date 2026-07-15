@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/models/user_profile.dart';
 import '../../../providers/app_providers.dart';
+import '../../../providers/settings_providers.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -48,6 +49,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = ref.watch(l10nProvider);
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -65,7 +68,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'FitForge',
+                  l10n.get('appName'),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -73,19 +76,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Set up your body data to begin',
+                  l10n.get('setupTitle'),
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
                 ),
                 const SizedBox(height: 32),
-                Text('Gender', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  l10n.get('gender'),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 SegmentedButton<Gender>(
-                  segments: const [
-                    ButtonSegment(value: Gender.male, label: Text('Male')),
-                    ButtonSegment(value: Gender.female, label: Text('Female')),
+                  segments: [
+                    ButtonSegment(
+                      value: Gender.male,
+                      label: Text(l10n.get('male')),
+                    ),
+                    ButtonSegment(
+                      value: Gender.female,
+                      label: Text(l10n.get('female')),
+                    ),
                   ],
                   selected: {_gender},
                   onSelectionChanged: (v) => setState(() => _gender = v.first),
@@ -94,13 +106,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 TextFormField(
                   controller: _ageController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Age',
-                    suffixText: 'yrs',
+                  decoration: InputDecoration(
+                    labelText: l10n.get('age'),
+                    suffixText: l10n.get('yrs'),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return '请输入年龄';
-                    if (int.tryParse(v) == null) return '请输入有效数字';
+                    if (v == null || v.isEmpty) {
+                      return l10n.get('ageRequired');
+                    }
+                    if (int.tryParse(v) == null) {
+                      return l10n.get('invalidNumber');
+                    }
                     return null;
                   },
                 ),
@@ -108,13 +124,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 TextFormField(
                   controller: _heightController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Height',
+                  decoration: InputDecoration(
+                    labelText: l10n.get('height'),
                     suffixText: 'cm',
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return '请输入身高';
-                    if (double.tryParse(v) == null) return '请输入有效数字';
+                    if (v == null || v.isEmpty) {
+                      return l10n.get('heightRequired');
+                    }
+                    if (double.tryParse(v) == null) {
+                      return l10n.get('invalidNumber');
+                    }
                     return null;
                   },
                 ),
@@ -122,24 +142,40 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 TextFormField(
                   controller: _weightController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Weight',
+                  decoration: InputDecoration(
+                    labelText: l10n.get('weight'),
                     suffixText: 'kg',
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return '请输入体重';
-                    if (double.tryParse(v) == null) return '请输入有效数字';
+                    if (v == null || v.isEmpty) {
+                      return l10n.get('weightRequired');
+                    }
+                    if (double.tryParse(v) == null) {
+                      return l10n.get('invalidNumber');
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 20),
-                Text('Goal', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  l10n.get('goal'),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 SegmentedButton<FitnessGoal>(
-                  segments: const [
-                    ButtonSegment( value: FitnessGoal.loseFat, label: Text('Cut')),
-                    ButtonSegment( value: FitnessGoal.buildMuscle, label: Text('Bulk')),
-                    ButtonSegment( value: FitnessGoal.maintain, label: Text('Maintain')),
+                  segments: [
+                    ButtonSegment(
+                      value: FitnessGoal.loseFat,
+                      label: Text(l10n.get('cut')),
+                    ),
+                    ButtonSegment(
+                      value: FitnessGoal.buildMuscle,
+                      label: Text(l10n.get('bulk')),
+                    ),
+                    ButtonSegment(
+                      value: FitnessGoal.maintain,
+                      label: Text(l10n.get('maintain')),
+                    ),
                   ],
                   selected: {_goal},
                   onSelectionChanged: (v) => setState(() => _goal = v.first),
@@ -147,7 +183,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 const SizedBox(height: 32),
                 FilledButton(
                   onPressed: _save,
-                  child: const Text('Get Started'),
+                  child: Text(l10n.get('getStarted')),
                 ),
               ],
             ),

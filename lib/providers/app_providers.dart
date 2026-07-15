@@ -20,69 +20,412 @@ final supabaseProvider = Provider<SupabaseService>(
   (ref) => SupabaseService.instance,
 );
 
+class UserDataOwnerMismatchException implements Exception {
+  final String entity;
+  final String expectedUserId;
+  final String actualUserId;
+
+  const UserDataOwnerMismatchException({
+    required this.entity,
+    required this.expectedUserId,
+    required this.actualUserId,
+  });
+
+  @override
+  String toString() =>
+      'UserDataOwnerMismatchException: $entity belongs to $actualUserId, '
+      'expected $expectedUserId.';
+}
+
+class _StaleUserScopeException implements Exception {
+  const _StaleUserScopeException();
+}
+
+void _requireOwner(String entity, String expectedUserId, String actualUserId) {
+  if (actualUserId != expectedUserId) {
+    throw UserDataOwnerMismatchException(
+      entity: entity,
+      expectedUserId: expectedUserId,
+      actualUserId: actualUserId,
+    );
+  }
+}
+
+void _requireWorkoutLogOwners(
+  Iterable<WorkoutLog> logs,
+  String expectedUserId,
+) {
+  for (final log in logs) {
+    _requireOwner('WorkoutLog ${log.id}', expectedUserId, log.userId);
+  }
+}
+
+void _requireDietLogOwners(Iterable<DietLog> logs, String expectedUserId) {
+  for (final log in logs) {
+    _requireOwner('DietLog ${log.id}', expectedUserId, log.userId);
+  }
+}
+
+void _requireProgressionRuleOwners(
+  Iterable<ProgressionRule> rules,
+  String expectedUserId,
+) {
+  for (final rule in rules) {
+    _requireOwner('ProgressionRule ${rule.id}', expectedUserId, rule.userId);
+  }
+}
+
+abstract interface class UserDataStore {
+  Future<UserProfile?> getUserProfile(String userId);
+
+  Future<void> saveUserProfile(String userId, UserProfile profile);
+
+  Future<List<Exercise>> getExercises(String userId);
+
+  Future<void> addExercise(String userId, Exercise exercise);
+
+  Future<List<WorkoutLog>> getWorkoutLogs(String userId, DateTime date);
+
+  Future<List<WorkoutLog>> getWorkoutLogsForMonth(
+    String userId,
+    DateTime month,
+  );
+
+  Future<WorkoutLog?> getLastWorkoutLogForExercise(
+    String userId,
+    String exerciseId,
+    DateTime before,
+  );
+
+  Future<List<ProgressionRule>> getProgressionRules(String userId);
+
+  Future<void> saveProgressionRule(String userId, ProgressionRule rule);
+
+  Future<void> deleteProgressionRule(String userId, String exerciseId);
+
+  Future<List<Food>> getFoods(String userId);
+
+  Future<bool> getSubscriptionStatus(String userId);
+
+  Future<void> setSubscriptionStatus(String userId, bool isPro);
+}
+
+class _AppDatabaseUserDataStore implements UserDataStore {
+  final AppDatabase _database;
+
+  const _AppDatabaseUserDataStore(this._database);
+
+  @override
+  Future<UserProfile?> getUserProfile(String userId) {
+    return _database.getUserProfile(userId);
+  }
+
+  @override
+  Future<void> saveUserProfile(String userId, UserProfile profile) {
+    return _database.saveUserProfile(userId, profile);
+  }
+
+  @override
+  Future<List<Exercise>> getExercises(String userId) {
+    return _database.getExercises(userId);
+  }
+
+  @override
+  Future<void> addExercise(String userId, Exercise exercise) {
+    return _database.addExercise(userId, exercise);
+  }
+
+  @override
+  Future<List<WorkoutLog>> getWorkoutLogs(String userId, DateTime date) {
+    return _database.getWorkoutLogs(userId, date);
+  }
+
+  @override
+  Future<List<WorkoutLog>> getWorkoutLogsForMonth(
+    String userId,
+    DateTime month,
+  ) {
+    return _database.getWorkoutLogsForMonth(userId, month);
+  }
+
+  @override
+  Future<WorkoutLog?> getLastWorkoutLogForExercise(
+    String userId,
+    String exerciseId,
+    DateTime before,
+  ) {
+    return _database.getLastWorkoutLogForExercise(userId, exerciseId, before);
+  }
+
+  @override
+  Future<List<ProgressionRule>> getProgressionRules(String userId) {
+    return _database.getProgressionRules(userId);
+  }
+
+  @override
+  Future<void> saveProgressionRule(String userId, ProgressionRule rule) {
+    return _database.saveProgressionRule(userId, rule);
+  }
+
+  @override
+  Future<void> deleteProgressionRule(String userId, String exerciseId) {
+    return _database.deleteProgressionRule(userId, exerciseId);
+  }
+
+  @override
+  Future<List<Food>> getFoods(String userId) {
+    return _database.getFoods(userId);
+  }
+
+  @override
+  Future<bool> getSubscriptionStatus(String userId) {
+    return _database.getSubscriptionStatus(userId);
+  }
+
+  @override
+  Future<void> setSubscriptionStatus(String userId, bool isPro) {
+    return _database.setSubscriptionStatus(userId, isPro);
+  }
+}
+
+final userDataStoreProvider = Provider<UserDataStore>((ref) {
+  return _AppDatabaseUserDataStore(ref.watch(appDatabaseProvider));
+});
+
+abstract interface class UserDataRemote {
+  Future<UserProfile?> getProfile(String userId);
+
+  Future<void> upsertProfile(String userId, UserProfile profile);
+
+  Future<List<Food>> getPublicFoods(String userId);
+
+  Future<List<WorkoutLog>> getWorkoutLogs(String userId, DateTime date);
+
+  Future<List<WorkoutLog>> getWorkoutLogsForMonth(
+    String userId,
+    DateTime month,
+  );
+
+  Future<List<DietLog>> getDietLogs(String userId, DateTime date);
+}
+
+class _SupabaseUserDataRemote implements UserDataRemote {
+  final SupabaseService _supabase;
+
+  const _SupabaseUserDataRemote(this._supabase);
+
+  Future<T> _runInScope<T>(String userId, Future<T> Function() request) async {
+    if ((_supabase.userId ?? '') != userId) {
+      throw const _StaleUserScopeException();
+    }
+    final result = await request();
+    if ((_supabase.userId ?? '') != userId) {
+      throw const _StaleUserScopeException();
+    }
+    return result;
+  }
+
+  @override
+  Future<UserProfile?> getProfile(String userId) {
+    return _runInScope(userId, _supabase.getProfile);
+  }
+
+  @override
+  Future<void> upsertProfile(String userId, UserProfile profile) {
+    return _runInScope(userId, () => _supabase.upsertProfile(profile));
+  }
+
+  @override
+  Future<List<Food>> getPublicFoods(String userId) {
+    return _runInScope(userId, _supabase.getPublicFoods);
+  }
+
+  @override
+  Future<List<WorkoutLog>> getWorkoutLogs(String userId, DateTime date) {
+    return _runInScope(userId, () => _supabase.getWorkoutLogs(date));
+  }
+
+  @override
+  Future<List<WorkoutLog>> getWorkoutLogsForMonth(
+    String userId,
+    DateTime month,
+  ) {
+    return _runInScope(userId, () => _supabase.getWorkoutLogsForMonth(month));
+  }
+
+  @override
+  Future<List<DietLog>> getDietLogs(String userId, DateTime date) {
+    return _runInScope(userId, () => _supabase.getDietLogs(date));
+  }
+}
+
+final userDataRemoteProvider = Provider<UserDataRemote>((ref) {
+  return _SupabaseUserDataRemote(ref.watch(supabaseProvider));
+});
+
+abstract interface class WorkoutLogWriteStore {
+  Future<void> addWorkoutLog(String userId, WorkoutLog log);
+
+  Future<void> saveWorkoutSetLogs(String userId, List<WorkoutSetLog> setLogs);
+
+  Future<void> addUnsyncedWorkout(String userId, WorkoutLog log);
+}
+
+class _AppDatabaseWorkoutLogWriteStore implements WorkoutLogWriteStore {
+  final AppDatabase _database;
+
+  const _AppDatabaseWorkoutLogWriteStore(this._database);
+
+  @override
+  Future<void> addWorkoutLog(String userId, WorkoutLog log) {
+    _requireOwner('WorkoutLog ${log.id}', userId, log.userId);
+    return _database.addWorkoutLog(userId, log);
+  }
+
+  @override
+  Future<void> saveWorkoutSetLogs(String userId, List<WorkoutSetLog> setLogs) {
+    return _database.saveWorkoutSetLogs(userId, setLogs);
+  }
+
+  @override
+  Future<void> addUnsyncedWorkout(String userId, WorkoutLog log) {
+    _requireOwner('WorkoutLog ${log.id}', userId, log.userId);
+    return _database.addUnsyncedWorkout(userId, log);
+  }
+}
+
+final workoutLogWriteStoreProvider = Provider<WorkoutLogWriteStore>((ref) {
+  return _AppDatabaseWorkoutLogWriteStore(ref.watch(appDatabaseProvider));
+});
+
+abstract interface class WorkoutLogRemoteWriter {
+  Future<void> addWorkoutLog(WorkoutLog log, {required String expectedUserId});
+}
+
+class _SupabaseWorkoutLogRemoteWriter implements WorkoutLogRemoteWriter {
+  final SupabaseService _supabase;
+
+  const _SupabaseWorkoutLogRemoteWriter(this._supabase);
+
+  @override
+  Future<void> addWorkoutLog(WorkoutLog log, {required String expectedUserId}) {
+    _requireOwner('WorkoutLog ${log.id}', expectedUserId, log.userId);
+    return _supabase.addWorkoutLogForSync(log, expectedUserId: expectedUserId);
+  }
+}
+
+final workoutLogRemoteWriterProvider = Provider<WorkoutLogRemoteWriter>((ref) {
+  return _SupabaseWorkoutLogRemoteWriter(ref.watch(supabaseProvider));
+});
+
 final selectedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
 
 final currentUserIdProvider = StateProvider<String>((ref) {
   return Supabase.instance.client.auth.currentUser?.id ?? '';
 });
 
+class UserScope {
+  final String userId;
+
+  const UserScope(this.userId);
+}
+
+/// A new identity is created for every account transition, including A -> B -> A.
+final currentUserScopeProvider = Provider<UserScope>((ref) {
+  return UserScope(ref.watch(currentUserIdProvider));
+});
+
 final isOnlineProvider = StateProvider<bool>((ref) => true);
 
 // Share nutrition plan with calendar for carb cycle markers
-final nutritionCycleProvider = StateProvider<List<String>?>((ref) => null);
-final nutritionStartDateProvider = StateProvider<DateTime?>((ref) => null);
+final nutritionCycleProvider = StateProvider<List<String>?>((ref) {
+  ref.watch(currentUserScopeProvider);
+  return null;
+});
+final nutritionStartDateProvider = StateProvider<DateTime?>((ref) {
+  ref.watch(currentUserScopeProvider);
+  return null;
+});
 
 // Track which dates have diet logs (for calendar green dots)
 class DietDatesNotifier extends StateNotifier<Set<String>> {
-  final SupabaseService _supabase;
-  DietDatesNotifier(this._supabase) : super({});
+  final UserDataRemote _remote;
+  final String _userId;
+  bool _active = true;
+
+  DietDatesNotifier(this._remote, this._userId) : super({});
 
   String _k(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   void addDate(DateTime d) {
+    if (!_active || _userId.isEmpty) return;
     state = {...state, _k(d)};
   }
 
-  void loadMonth(int year, int month) async {
+  Future<void> loadMonth(int year, int month) async {
+    if (!_active || _userId.isEmpty) return;
     try {
       final firstDay = DateTime(year, month, 1);
-
-      final logs = await _supabase.getDietLogs(firstDay);
-      for (final log in logs) {
-        state = {...state, _k(log.date)};
-      }
+      final logs = await _remote.getDietLogs(_userId, firstDay);
+      _requireDietLogOwners(logs, _userId);
+      if (!_active) return;
+      state = {...state, ...logs.map((log) => _k(log.date))};
+    } on UserDataOwnerMismatchException {
+      rethrow;
     } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _active = false;
+    super.dispose();
   }
 }
 
 final dietDatesProvider = StateNotifierProvider<DietDatesNotifier, Set<String>>(
-  (ref) => DietDatesNotifier(ref.read(supabaseProvider)),
+  (ref) => DietDatesNotifier(
+    ref.watch(userDataRemoteProvider),
+    ref.watch(currentUserIdProvider),
+  ),
 );
 
 final isProProvider = StateNotifierProvider<IsProNotifier, bool>((ref) {
-  final n = IsProNotifier();
+  final n = IsProNotifier.forUser(
+    ref.watch(currentUserIdProvider),
+    store: ref.watch(userDataStoreProvider),
+  );
   n.load();
-  ref.listen(currentUserIdProvider, (_, __) => n.load());
   return n;
 });
 
 class IsProNotifier extends StateNotifier<bool> {
-  IsProNotifier() : super(false);
+  final String _userId;
+  final UserDataStore _store;
+  bool _active = true;
+
+  IsProNotifier() : this.forUser('');
+
+  IsProNotifier.forUser(this._userId, {UserDataStore? store})
+    : _store = store ?? _AppDatabaseUserDataStore(AppDatabase.instance),
+      super(false);
 
   Future<void> load() async {
-    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
-    if (uid.isNotEmpty) {
-      state = await AppDatabase.instance.getSubscriptionStatus(uid);
-    }
+    if (_userId.isEmpty) return;
+    final value = await _store.getSubscriptionStatus(_userId);
+    if (_active) state = value;
   }
 
   Future<void> setPro(bool value) async {
+    if (!_active || _userId.isEmpty) return;
     state = value;
-    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
-    if (uid.isNotEmpty) {
-      await AppDatabase.instance.setSubscriptionStatus(uid, value);
-    }
+    await _store.setSubscriptionStatus(_userId, value);
+  }
+
+  @override
+  void dispose() {
+    _active = false;
+    super.dispose();
   }
 }
 
@@ -93,32 +436,72 @@ final userProfileProvider =
     );
 
 class UserProfileNotifier extends AsyncNotifier<UserProfile?> {
+  Object _userScope = Object();
+
   @override
   Future<UserProfile?> build() async {
-    final userId = ref.read(currentUserIdProvider);
+    _userScope = Object();
+    final userScope = _userScope;
+    final userId = ref.watch(currentUserIdProvider);
     if (userId.isEmpty) return null;
 
-    final supabase = ref.read(supabaseProvider);
+    final remote = ref.watch(userDataRemoteProvider);
+    final store = ref.watch(userDataStoreProvider);
+    Object? remoteError;
+    StackTrace? remoteStackTrace;
+    UserProfile? remoteProfile;
     try {
-      final remote = await supabase.getProfile();
-      if (remote != null) {
-        await AppDatabase.instance.saveUserProfile(userId, remote);
-        return remote;
-      }
-    } catch (_) {}
+      remoteProfile = await remote.getProfile(userId);
+    } on UserDataOwnerMismatchException {
+      rethrow;
+    } catch (error, stackTrace) {
+      remoteError = error;
+      remoteStackTrace = stackTrace;
+    }
 
-    return AppDatabase.instance.getUserProfile(userId);
+    if (remoteProfile != null) {
+      _requireOwner('UserProfile', userId, remoteProfile.id);
+      if (_isCurrentUserScope(userId, userScope)) {
+        await store.saveUserProfile(userId, remoteProfile);
+      }
+      return remoteProfile;
+    }
+
+    final localProfile = await store.getUserProfile(userId);
+    if (localProfile != null) {
+      _requireOwner('UserProfile', userId, localProfile.id);
+      return localProfile;
+    }
+
+    if (remoteError != null) {
+      Error.throwWithStackTrace(remoteError, remoteStackTrace!);
+    }
+    return null;
+  }
+
+  bool _isCurrentUserScope(String userId, Object userScope) {
+    return identical(_userScope, userScope) &&
+        ref.read(currentUserIdProvider) == userId;
   }
 
   Future<void> saveProfile(UserProfile profile) async {
     final userId = ref.read(currentUserIdProvider);
-    await AppDatabase.instance.saveUserProfile(userId, profile);
+    final userScope = _userScope;
+    if (userId.isEmpty) return;
+    _requireOwner('UserProfile', userId, profile.id);
+    final store = ref.read(userDataStoreProvider);
+    await store.saveUserProfile(userId, profile);
+    if (!_isCurrentUserScope(userId, userScope)) return;
 
     try {
-      await ref.read(supabaseProvider).upsertProfile(profile);
+      await ref.read(userDataRemoteProvider).upsertProfile(userId, profile);
+    } on UserDataOwnerMismatchException {
+      rethrow;
     } catch (_) {}
 
-    state = AsyncData(profile);
+    if (_isCurrentUserScope(userId, userScope)) {
+      state = AsyncData(profile);
+    }
   }
 }
 
@@ -137,16 +520,32 @@ final exerciseListProvider =
     );
 
 class ExerciseListNotifier extends AsyncNotifier<List<Exercise>> {
+  Object _userScope = Object();
+
   @override
   Future<List<Exercise>> build() async {
-    final userId = ref.read(currentUserIdProvider);
-    return AppDatabase.instance.getExercises(userId);
+    _userScope = Object();
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId.isEmpty) return [];
+    return ref.watch(userDataStoreProvider).getExercises(userId);
   }
 
   Future<void> addExercise(Exercise exercise) async {
     final userId = ref.read(currentUserIdProvider);
-    await AppDatabase.instance.addExercise(userId, exercise);
-    state = AsyncData(await AppDatabase.instance.getExercises(userId));
+    final userScope = _userScope;
+    if (userId.isEmpty) return;
+    final store = ref.read(userDataStoreProvider);
+    await store.addExercise(userId, exercise);
+    if (!_isCurrentUserScope(userId, userScope)) return;
+    final exercises = await store.getExercises(userId);
+    if (_isCurrentUserScope(userId, userScope)) {
+      state = AsyncData(exercises);
+    }
+  }
+
+  bool _isCurrentUserScope(String userId, Object userScope) {
+    return identical(_userScope, userScope) &&
+        ref.read(currentUserIdProvider) == userId;
   }
 }
 
@@ -166,18 +565,30 @@ final bodyPartsProvider = Provider<List<String>>((ref) {
 // ===== Workout Logs =====
 final workoutLogsForDateProvider =
     FutureProvider.family<List<WorkoutLog>, DateTime>((ref, date) async {
+      final userId = ref.watch(currentUserIdProvider);
+      if (userId.isEmpty) return [];
+      final remote = ref.watch(userDataRemoteProvider);
+      final store = ref.watch(userDataStoreProvider);
       try {
-        return ref.read(supabaseProvider).getWorkoutLogs(date);
+        final logs = await remote.getWorkoutLogs(userId, date);
+        _requireWorkoutLogOwners(logs, userId);
+        return logs;
+      } on UserDataOwnerMismatchException {
+        rethrow;
       } catch (_) {
-        final userId = ref.read(currentUserIdProvider);
-        return AppDatabase.instance.getWorkoutLogs(userId, date);
+        final logs = await store.getWorkoutLogs(userId, date);
+        _requireWorkoutLogOwners(logs, userId);
+        return logs;
       }
     });
 
 // ---- Workout Dates Cache (in-memory, offline-ready) ----
 class WorkoutCacheNotifier extends StateNotifier<Map<String, Set<DateTime>>> {
-  final SupabaseService _supabase;
-  WorkoutCacheNotifier(this._supabase) : super({});
+  final UserDataRemote _remote;
+  final String _userId;
+  bool _active = true;
+
+  WorkoutCacheNotifier(this._remote, this._userId) : super({});
 
   String _key(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
@@ -186,6 +597,7 @@ class WorkoutCacheNotifier extends StateNotifier<Map<String, Set<DateTime>>> {
   }
 
   void addDate(DateTime date) {
+    if (!_active || _userId.isEmpty) return;
     final k = _key(date);
     state = {
       ...state,
@@ -194,48 +606,81 @@ class WorkoutCacheNotifier extends StateNotifier<Map<String, Set<DateTime>>> {
   }
 
   Future<void> loadMonth(DateTime month) async {
+    if (!_active || _userId.isEmpty) return;
     try {
-      final logs = await _supabase.getWorkoutLogsForMonth(month);
+      final logs = await _remote.getWorkoutLogsForMonth(_userId, month);
+      _requireWorkoutLogOwners(logs, _userId);
+      if (!_active) return;
       final dates = logs
           .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
           .toSet();
       state = {...state, _key(month): dates};
+    } on UserDataOwnerMismatchException {
+      rethrow;
     } catch (_) {}
   }
 
   Future<void> loadAll() async {
     final now = DateTime.now();
     for (int i = -3; i <= 3; i++) {
+      if (!_active || _userId.isEmpty) return;
       final month = DateTime(now.year, now.month + i);
       await loadMonth(month);
     }
+  }
+
+  @override
+  void dispose() {
+    _active = false;
+    super.dispose();
   }
 }
 
 final workoutCacheProvider =
     StateNotifierProvider<WorkoutCacheNotifier, Map<String, Set<DateTime>>>(
-      (ref) => WorkoutCacheNotifier(ref.read(supabaseProvider)),
+      (ref) => WorkoutCacheNotifier(
+        ref.watch(userDataRemoteProvider),
+        ref.watch(currentUserIdProvider),
+      ),
     );
 
 class WorkoutLogCacheNotifier
     extends StateNotifier<Map<String, List<WorkoutLog>>> {
-  final SupabaseService _supabase;
-  WorkoutLogCacheNotifier(this._supabase) : super({});
+  final UserDataRemote _remote;
+  final String _userId;
+  bool _active = true;
+
+  WorkoutLogCacheNotifier(this._remote, this._userId) : super({});
+
   String _k(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   List<WorkoutLog> getLogs(DateTime d) => state[_k(d)] ?? [];
+
   Future<void> loadDate(DateTime d) async {
+    if (!_active || _userId.isEmpty) return;
     try {
-      final logs = await _supabase.getWorkoutLogs(d);
+      final logs = await _remote.getWorkoutLogs(_userId, d);
+      _requireWorkoutLogOwners(logs, _userId);
+      if (!_active) return;
       state = {...state, _k(d): logs};
+    } on UserDataOwnerMismatchException {
+      rethrow;
     } catch (_) {}
   }
 
   void addLogs(DateTime d, List<WorkoutLog> logs) {
+    if (!_active || _userId.isEmpty) return;
+    _requireWorkoutLogOwners(logs, _userId);
     final k = _k(d);
     final e = List<WorkoutLog>.from(state[k] ?? []);
     e.addAll(logs);
     state = {...state, k: e};
+  }
+
+  @override
+  void dispose() {
+    _active = false;
+    super.dispose();
   }
 }
 
@@ -243,25 +688,32 @@ final workoutLogCacheProvider =
     StateNotifierProvider<
       WorkoutLogCacheNotifier,
       Map<String, List<WorkoutLog>>
-    >((ref) => WorkoutLogCacheNotifier(ref.read(supabaseProvider)));
+    >(
+      (ref) => WorkoutLogCacheNotifier(
+        ref.watch(userDataRemoteProvider),
+        ref.watch(currentUserIdProvider),
+      ),
+    );
 
 final workoutDatesForMonthProvider =
     FutureProvider.family<Set<DateTime>, DateTime>((ref, month) async {
+      final userId = ref.watch(currentUserIdProvider);
+      if (userId.isEmpty) return {};
+      final remote = ref.watch(userDataRemoteProvider);
+      final store = ref.watch(userDataStoreProvider);
       try {
-        if (ref.read(isOnlineProvider)) {
-          final remote = await ref
-              .read(supabaseProvider)
-              .getWorkoutLogsForMonth(month);
-          return remote
+        if (ref.watch(isOnlineProvider)) {
+          final logs = await remote.getWorkoutLogsForMonth(userId, month);
+          _requireWorkoutLogOwners(logs, userId);
+          return logs
               .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
               .toSet();
         }
+      } on UserDataOwnerMismatchException {
+        rethrow;
       } catch (_) {}
-      final userId = ref.read(currentUserIdProvider);
-      final local = await AppDatabase.instance.getWorkoutLogsForMonth(
-        userId,
-        month,
-      );
+      final local = await store.getWorkoutLogsForMonth(userId, month);
+      _requireWorkoutLogOwners(local, userId);
       return local
           .map((l) => DateTime(l.date.year, l.date.month, l.date.day))
           .toSet();
@@ -274,22 +726,55 @@ final progressionRulesProvider =
     );
 
 class ProgressionRulesNotifier extends AsyncNotifier<List<ProgressionRule>> {
+  Object _userScope = Object();
+
   @override
   Future<List<ProgressionRule>> build() async {
+    _userScope = Object();
     final userId = ref.watch(currentUserIdProvider);
-    return AppDatabase.instance.getProgressionRules(userId);
+    if (userId.isEmpty) return [];
+    final rules = await ref
+        .watch(userDataStoreProvider)
+        .getProgressionRules(userId);
+    _requireProgressionRuleOwners(rules, userId);
+    return rules;
   }
 
   Future<void> save(ProgressionRule rule) async {
     final userId = ref.read(currentUserIdProvider);
-    await AppDatabase.instance.saveProgressionRule(userId, rule);
-    state = AsyncData(await AppDatabase.instance.getProgressionRules(userId));
+    final userScope = _userScope;
+    if (userId.isEmpty) return;
+    _requireOwner('ProgressionRule ${rule.id}', userId, rule.userId);
+    final store = ref.read(userDataStoreProvider);
+    await store.saveProgressionRule(userId, rule);
+    await _publishRulesIfCurrent(userId, userScope, store);
   }
 
   Future<void> delete(String exerciseId) async {
     final userId = ref.read(currentUserIdProvider);
-    await AppDatabase.instance.deleteProgressionRule(userId, exerciseId);
-    state = AsyncData(await AppDatabase.instance.getProgressionRules(userId));
+    final userScope = _userScope;
+    if (userId.isEmpty) return;
+    final store = ref.read(userDataStoreProvider);
+    await store.deleteProgressionRule(userId, exerciseId);
+    await _publishRulesIfCurrent(userId, userScope, store);
+  }
+
+  bool _isCurrentUserScope(String userId, Object userScope) {
+    return identical(_userScope, userScope) &&
+        ref.read(currentUserIdProvider) == userId;
+  }
+
+  Future<void> _publishRulesIfCurrent(
+    String userId,
+    Object userScope,
+    UserDataStore store,
+  ) async {
+    if (!_isCurrentUserScope(userId, userScope)) return;
+    final rules = await store.getProgressionRules(userId);
+    _requireProgressionRuleOwners(rules, userId);
+    if (_isCurrentUserScope(userId, userScope)) {
+      state = AsyncData(rules);
+    }
   }
 }
 
@@ -305,11 +790,14 @@ final lastWorkoutLogForExerciseProvider =
       args,
     ) async {
       final userId = ref.watch(currentUserIdProvider);
-      return AppDatabase.instance.getLastWorkoutLogForExercise(
-        userId,
-        args.exerciseId,
-        args.before,
-      );
+      if (userId.isEmpty) return null;
+      final log = await ref
+          .watch(userDataStoreProvider)
+          .getLastWorkoutLogForExercise(userId, args.exerciseId, args.before);
+      if (log != null) {
+        _requireOwner('WorkoutLog ${log.id}', userId, log.userId);
+      }
+      return log;
     });
 
 /// Computes a progression suggestion for an exercise based on its enabled
@@ -334,36 +822,129 @@ final progressionSuggestionProvider =
     });
 
 // ===== Training Programs =====
+abstract interface class TrainingProgramStore {
+  Future<List<TrainingProgram>> getTrainingPrograms(String userId);
+
+  Future<void> saveTrainingProgram(String userId, TrainingProgram program);
+
+  Future<void> deleteTrainingProgram(String userId, String programId);
+
+  Future<void> setActiveTrainingProgram(
+    String userId,
+    String programId, {
+    DateTime? activatedAt,
+    required int? plannedCycleCount,
+  });
+
+  Future<void> endTrainingProgram(String userId, String programId);
+
+  Future<TrainingProgram?> getActiveTrainingProgram(String userId);
+}
+
+class _AppDatabaseTrainingProgramStore implements TrainingProgramStore {
+  final AppDatabase _database;
+
+  const _AppDatabaseTrainingProgramStore(this._database);
+
+  @override
+  Future<List<TrainingProgram>> getTrainingPrograms(String userId) {
+    return _database.getTrainingPrograms(userId);
+  }
+
+  @override
+  Future<void> saveTrainingProgram(String userId, TrainingProgram program) {
+    return _database.saveTrainingProgram(userId, program);
+  }
+
+  @override
+  Future<void> deleteTrainingProgram(String userId, String programId) {
+    return _database.deleteTrainingProgram(userId, programId);
+  }
+
+  @override
+  Future<void> setActiveTrainingProgram(
+    String userId,
+    String programId, {
+    DateTime? activatedAt,
+    required int? plannedCycleCount,
+  }) {
+    return _database.setActiveTrainingProgram(
+      userId,
+      programId,
+      activatedAt: activatedAt,
+      plannedCycleCount: plannedCycleCount,
+    );
+  }
+
+  @override
+  Future<void> endTrainingProgram(String userId, String programId) {
+    return _database.endTrainingProgram(userId, programId);
+  }
+
+  @override
+  Future<TrainingProgram?> getActiveTrainingProgram(String userId) {
+    return _database.getActiveTrainingProgram(userId);
+  }
+}
+
+final trainingProgramStoreProvider = Provider<TrainingProgramStore>((ref) {
+  return _AppDatabaseTrainingProgramStore(ref.watch(appDatabaseProvider));
+});
+
 final trainingProgramsProvider =
     AsyncNotifierProvider<TrainingProgramsNotifier, List<TrainingProgram>>(
       TrainingProgramsNotifier.new,
     );
 
 class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
+  Object _userScope = Object();
+
   @override
   Future<List<TrainingProgram>> build() async {
+    _userScope = Object();
     final userId = ref.watch(currentUserIdProvider);
-    return AppDatabase.instance.getTrainingPrograms(userId);
+    final store = ref.watch(trainingProgramStoreProvider);
+    return store.getTrainingPrograms(userId);
   }
 
-  bool _matchesCurrentUser(String? expectedUserId) {
-    final userId = ref.read(currentUserIdProvider);
+  bool _canStartMutation(String userId, String? expectedUserId) {
     return userId.isNotEmpty &&
         (expectedUserId == null || expectedUserId == userId);
   }
 
+  bool _isCurrentMutation(String userId, Object userScope) {
+    return identical(_userScope, userScope) &&
+        ref.read(currentUserIdProvider) == userId;
+  }
+
+  Future<void> _publishProgramsIfCurrent(
+    String userId,
+    Object userScope,
+    TrainingProgramStore store,
+  ) async {
+    if (!_isCurrentMutation(userId, userScope)) return;
+    final programs = await store.getTrainingPrograms(userId);
+    if (_isCurrentMutation(userId, userScope)) {
+      state = AsyncData(programs);
+    }
+  }
+
   Future<void> save(TrainingProgram program) async {
     final userId = ref.read(currentUserIdProvider);
-    if (!_matchesCurrentUser(program.userId)) return;
-    await AppDatabase.instance.saveTrainingProgram(userId, program);
-    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+    final userScope = _userScope;
+    if (!_canStartMutation(userId, program.userId)) return;
+    final store = ref.read(trainingProgramStoreProvider);
+    await store.saveTrainingProgram(userId, program);
+    await _publishProgramsIfCurrent(userId, userScope, store);
   }
 
   Future<void> delete(String programId, {String? expectedUserId}) async {
     final userId = ref.read(currentUserIdProvider);
-    if (!_matchesCurrentUser(expectedUserId)) return;
-    await AppDatabase.instance.deleteTrainingProgram(userId, programId);
-    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+    final userScope = _userScope;
+    if (!_canStartMutation(userId, expectedUserId)) return;
+    final store = ref.read(trainingProgramStoreProvider);
+    await store.deleteTrainingProgram(userId, programId);
+    await _publishProgramsIfCurrent(userId, userScope, store);
   }
 
   Future<void> setActive(
@@ -373,44 +954,54 @@ class TrainingProgramsNotifier extends AsyncNotifier<List<TrainingProgram>> {
     String? expectedUserId,
   }) async {
     final userId = ref.read(currentUserIdProvider);
-    if (!_matchesCurrentUser(expectedUserId)) return;
-    await AppDatabase.instance.setActiveTrainingProgram(
+    final userScope = _userScope;
+    if (!_canStartMutation(userId, expectedUserId)) return;
+    final store = ref.read(trainingProgramStoreProvider);
+    await store.setActiveTrainingProgram(
       userId,
       programId,
       activatedAt: activatedAt,
       plannedCycleCount: plannedCycleCount,
     );
-    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+    await _publishProgramsIfCurrent(userId, userScope, store);
   }
 
   Future<void> end(String programId, {String? expectedUserId}) async {
     final userId = ref.read(currentUserIdProvider);
-    if (!_matchesCurrentUser(expectedUserId)) return;
-    await AppDatabase.instance.endTrainingProgram(userId, programId);
-    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+    final userScope = _userScope;
+    if (!_canStartMutation(userId, expectedUserId)) return;
+    final store = ref.read(trainingProgramStoreProvider);
+    await store.endTrainingProgram(userId, programId);
+    await _publishProgramsIfCurrent(userId, userScope, store);
   }
 
-  Future<void> advanceDay() async {
+  Future<void> advanceDay({String? expectedUserId}) async {
     final userId = ref.read(currentUserIdProvider);
-    final program = await AppDatabase.instance.getActiveTrainingProgram(userId);
+    final userScope = _userScope;
+    if (!_canStartMutation(userId, expectedUserId)) return;
+    final store = ref.read(trainingProgramStoreProvider);
+    final program = await store.getActiveTrainingProgram(userId);
     if (program == null) return;
     if (program.isPausedNow()) return;
+    if (!_isCurrentMutation(userId, userScope)) return;
     final advanced = program.advanceToNextDay();
-    await AppDatabase.instance.saveTrainingProgram(userId, advanced);
-    state = AsyncData(await AppDatabase.instance.getTrainingPrograms(userId));
+    await store.saveTrainingProgram(userId, advanced);
+    await _publishProgramsIfCurrent(userId, userScope, store);
   }
 }
 
-final activeTrainingProgramProvider = Provider<TrainingProgram?>((ref) {
+final activeTrainingProgramProvider = FutureProvider<TrainingProgram?>((
+  ref,
+) async {
   final userId = ref.watch(currentUserIdProvider);
-  final programs = ref.watch(trainingProgramsProvider).valueOrNull ?? [];
+  final programs = await ref.watch(trainingProgramsProvider.future);
   return activeTrainingProgramForUser(programs, userId);
 });
 
 final activeTrainingProgramForDateProvider =
-    Provider.family<TrainingProgram?, DateTime>((ref, date) {
+    FutureProvider.family<TrainingProgram?, DateTime>((ref, date) async {
       final userId = ref.watch(currentUserIdProvider);
-      final programs = ref.watch(trainingProgramsProvider).valueOrNull ?? [];
+      final programs = await ref.watch(trainingProgramsProvider.future);
       return activeTrainingProgramForUser(programs, userId, date: date);
     });
 
@@ -426,7 +1017,9 @@ final workoutPrescriptionsForDateProvider =
       date,
     ) async {
       final userId = ref.watch(currentUserIdProvider);
-      final program = ref.watch(activeTrainingProgramForDateProvider(date));
+      final program = await ref.watch(
+        activeTrainingProgramForDateProvider(date).future,
+      );
       if (program == null) return [];
       if (program.userId != userId) return [];
 
@@ -476,8 +1069,11 @@ DateTime _dateOnlyUtc(DateTime value) =>
 // ===== Diet Logs =====
 // ---- Diet Cache (in-memory, offline-ready) ----
 class DietCacheNotifier extends StateNotifier<Map<String, List<DietLog>>> {
-  final SupabaseService _supabase;
-  DietCacheNotifier(this._supabase) : super({});
+  final UserDataRemote _remote;
+  final String _userId;
+  bool _active = true;
+
+  DietCacheNotifier(this._remote, this._userId) : super({});
 
   String _key(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -485,13 +1081,20 @@ class DietCacheNotifier extends StateNotifier<Map<String, List<DietLog>>> {
   List<DietLog> getLogsForDate(DateTime date) => state[_key(date)] ?? [];
 
   Future<void> loadDate(DateTime date) async {
+    if (!_active || _userId.isEmpty) return;
     try {
-      final logs = await _supabase.getDietLogs(date);
+      final logs = await _remote.getDietLogs(_userId, date);
+      _requireDietLogOwners(logs, _userId);
+      if (!_active) return;
       state = {...state, _key(date): logs};
+    } on UserDataOwnerMismatchException {
+      rethrow;
     } catch (_) {}
   }
 
   void addLog(DietLog log) {
+    if (!_active || _userId.isEmpty) return;
+    _requireOwner('DietLog ${log.id}', _userId, log.userId);
     final k = _key(log.date);
     final logs = List<DietLog>.from(state[k] ?? []);
     logs.add(log);
@@ -499,6 +1102,8 @@ class DietCacheNotifier extends StateNotifier<Map<String, List<DietLog>>> {
   }
 
   void updateLog(DietLog updated) {
+    if (!_active || _userId.isEmpty) return;
+    _requireOwner('DietLog ${updated.id}', _userId, updated.userId);
     final k = _key(updated.date);
     final logs = List<DietLog>.from(state[k] ?? []);
     final idx = logs.indexWhere((l) => l.id == updated.id);
@@ -507,16 +1112,26 @@ class DietCacheNotifier extends StateNotifier<Map<String, List<DietLog>>> {
   }
 
   void deleteLog(String id, DateTime date) {
+    if (!_active || _userId.isEmpty) return;
     final k = _key(date);
     final logs = List<DietLog>.from(state[k] ?? []);
     logs.removeWhere((l) => l.id == id);
     state = {...state, k: logs};
   }
+
+  @override
+  void dispose() {
+    _active = false;
+    super.dispose();
+  }
 }
 
 final dietCacheProvider =
     StateNotifierProvider<DietCacheNotifier, Map<String, List<DietLog>>>(
-      (ref) => DietCacheNotifier(ref.read(supabaseProvider)),
+      (ref) => DietCacheNotifier(
+        ref.watch(userDataRemoteProvider),
+        ref.watch(currentUserIdProvider),
+      ),
     );
 
 // ===== Foods =====
@@ -527,16 +1142,18 @@ final foodListProvider = AsyncNotifierProvider<FoodListNotifier, List<Food>>(
 class FoodListNotifier extends AsyncNotifier<List<Food>> {
   @override
   Future<List<Food>> build() async {
-    final userId = ref.read(currentUserIdProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId.isEmpty) return [];
+    final remote = ref.watch(userDataRemoteProvider);
+    final store = ref.watch(userDataStoreProvider);
 
     try {
-      if (ref.read(isOnlineProvider)) {
-        final remote = await ref.read(supabaseProvider).getPublicFoods();
-        return remote;
+      if (ref.watch(isOnlineProvider)) {
+        return await remote.getPublicFoods(userId);
       }
     } catch (_) {}
 
-    return AppDatabase.instance.getFoods(userId);
+    return store.getFoods(userId);
   }
 }
 

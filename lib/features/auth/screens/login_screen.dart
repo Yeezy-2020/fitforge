@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/metallic_surface.dart';
-import '../../../providers/app_providers.dart';
+import '../../../providers/settings_providers.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -27,11 +27,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    final l10n = ref.read(l10nProvider);
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    final isLogin = _isLogin;
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
+        SnackBar(content: Text(l10n.get('emailPasswordRequired'))),
       );
       return;
     }
@@ -39,7 +41,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _loading = true);
     try {
       final client = Supabase.instance.client;
-      if (_isLogin) {
+      if (isLogin) {
         await client.auth
             .signInWithPassword(email: email, password: password)
             .timeout(const Duration(seconds: 15));
@@ -48,34 +50,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             .signUp(email: email, password: password)
             .timeout(const Duration(seconds: 15));
       }
+      if (!mounted) return;
 
       final user = client.auth.currentUser;
       if (user == null) {
-        if (mounted) {
-          setState(() => _loading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                _isLogin
-                    ? 'Invalid email or password'
-                    : 'Sign up failed, try again',
-              ),
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isLogin
+                  ? l10n.get('invalidCredentials')
+                  : l10n.get('signUpFailed'),
             ),
-          );
-        }
+          ),
+        );
         return;
       }
 
-      ref.read(currentUserIdProvider.notifier).state = user.id;
-      ref.read(workoutCacheProvider.notifier).loadAll();
-      ref.read(dietCacheProvider.notifier).loadDate(DateTime.now());
-      if (mounted) context.go('/onboarding');
-    } catch (e) {
+      context.go('/auth-loading');
+    } catch (_) {
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_isLogin ? "Login" : "Sign up"} failed: $e'),
+            content: Text(
+              l10n.get(isLogin ? 'loginFailed' : 'signUpFailedGeneric'),
+            ),
           ),
         );
       }
@@ -85,6 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = ref.watch(l10nProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -102,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'FitForge',
+                l10n.get('appName'),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineLarge?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -110,7 +111,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Log every rep. Own every meal.',
+                l10n.get('tagline'),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey),
               ),
@@ -123,9 +124,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
+                      decoration: InputDecoration(
+                        labelText: l10n.get('email'),
+                        prefixIcon: const Icon(Icons.email_outlined),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -133,9 +134,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        labelText: 'Password',
+                        labelText: l10n.get('password'),
                         prefixIcon: const Icon(Icons.lock_outlined),
                         suffixIcon: IconButton(
+                          tooltip: l10n.get(
+                            _obscurePassword ? 'showPassword' : 'hidePassword',
+                          ),
                           icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_off_outlined
@@ -152,11 +156,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () => setState(() => _isLogin = !_isLogin),
+                        onPressed: _loading
+                            ? null
+                            : () => setState(() => _isLogin = !_isLogin),
                         child: Text(
                           _isLogin
-                              ? 'No account? Sign up'
-                              : 'Have an account? Log in',
+                              ? l10n.get('noAccount')
+                              : l10n.get('haveAccount'),
                         ),
                       ),
                     ),
@@ -175,7 +181,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ),
                               )
                             : Text(
-                                _isLogin ? '登录' : '注册',
+                                l10n.get(_isLogin ? 'login' : 'signUp'),
                                 style: const TextStyle(fontSize: 16),
                               ),
                       ),
@@ -187,7 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
-                            'or',
+                            l10n.get('or'),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: Colors.grey,
                             ),
@@ -200,13 +206,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     OutlinedButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Google Sign-In is coming soon'),
+                          SnackBar(
+                            content: Text(l10n.get('googleLoginComingSoon')),
                           ),
                         );
                       },
                       icon: const Icon(Icons.g_mobiledata, size: 24),
-                      label: const Text('Sign in with Google'),
+                      label: Text(l10n.get('googleLogin')),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -215,13 +221,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     OutlinedButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Apple Sign-In is coming soon'),
+                          SnackBar(
+                            content: Text(l10n.get('appleLoginComingSoon')),
                           ),
                         );
                       },
                       icon: const Icon(Icons.apple, size: 24),
-                      label: const Text('Sign in with Apple'),
+                      label: Text(l10n.get('appleLogin')),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
